@@ -8,7 +8,10 @@ use crate::loader::run;
 async fn main() {
     dotenv::dotenv().ok();
     pretty_env_logger::init();
-    log::info!("Bot tarting");
+    println!("Bot starting...");
 
-    run().await.expect("TODO: panic message");
+    match run().await {
+        Ok(_) => println!("Bot stopped"),
+        Err(e) => eprintln!("Error: {}", e),
+    }
 }

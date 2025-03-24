@@ -4,6 +4,8 @@ use crate::handlers::messages::sound::voice::voice_handler;
 use crate::loader::Error;
 use teloxide::prelude::Message;
 use teloxide::Bot;
+use crate::handlers::messages::sound::voice_note::voice_note_handler;
+
 
 pub enum SoundEnum {
     Voice,
@@ -20,13 +22,15 @@ pub(crate) async fn sounds_handlers(
         SoundEnum::Voice
     } else if message.video_note().is_some() {
         SoundEnum::VideoNote
-    } else {
+    } else if message.audio().is_some() {
         SoundEnum::Audio
+    } else {
+        return Ok(());
     };
 
     match sound_enum {
         SoundEnum::Audio => audio_handler(bot, message, config).await,
         SoundEnum::Voice => voice_handler(bot, message, config).await,
-        SoundEnum::VideoNote => voice_handler(bot, message, config).await,
+        SoundEnum::VideoNote => voice_note_handler(bot, message, config).await,
     }
 }
