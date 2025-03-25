@@ -2,11 +2,7 @@ use crate::config::Config;
 use crate::util::errors::MyError;
 use base64::encode;
 use bytes::Bytes;
-use google_generative_ai_rs::v1::gemini::request::{FileData, InlineData};
-use google_generative_ai_rs::v1::{
-    api::Client,
-    gemini::{request::Request as GeminiRequest, Content, Part, Role},
-};
+use gemini_client_rs::types::{Candidate, Content, ContentPart, GenerateContentRequest, PartResponse, Role};
 use std::error::Error;
 use std::io::Read;
 use teloxide::payloads::SendMessageSetters;
@@ -75,30 +71,39 @@ pub struct Transcription {
 
 impl Transcription {
     pub async fn to_text(self) -> Result<String, Box<dyn Error>> {
-        let encoded_data = encode(&self.data);
-        let txt_request = GeminiRequest {
+        let request = GenerateContentRequest {
             contents: vec![Content {
+                parts: vec![ContentPart::Text(
+                    "Сделай транскрипцию голосового сообщения:\n".to_owned() + self.data.,
+                )],
                 role: Role::User,
-                parts: vec![Part {
-                    text: Some("Транскрибируй этот голосовой файл".to_string()),
-                    inline_data: Some(InlineData {
-                        mime_type: String::from("audio/ogg"),
-                        data: encoded_data,
-                    }),
-                    file_data: None,
-                    video_metadata: None,
-                }],
             }],
-            tools: vec![],
-            safety_settings: vec![],
-            generation_config: None,
+            tools: None,
         };
 
-        let response = self.config.get_ai_client().post(30, &txt_request).await?;
+        let response = self
+            .config
+            .get_client()
+            .generate_content("gemini-2.0-flash-exp", &request)
+            .await?;
 
-        let response_string = format!("{:?}", response);
+        let response_string = Self::candidate_to_string(response.candidates);
 
         println!("{}", response_string);
         Ok(response_string)
+    }
+
+    fn candidate_to_string(candidates: Option<Vec<Candidate>>) -> String {
+        let mut response = String::new();
+        if let Some(candidates) = candidates {
+            for candidate in candidates {
+                for part in candidate.content.parts {
+                    if let PartResponse::Text(text) = part {
+                        response = text.clone();
+                    }
+                }
+            }
+        }
+        response
     }
 }

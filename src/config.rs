@@ -1,23 +1,22 @@
-use std::sync::Arc;
 use dotenv::dotenv;
-use google_generative_ai_rs::v1::api::Client;
+use gemini_client_rs::GeminiClient;
+use std::sync::Arc;
 use teloxide::prelude::*;
 
 #[derive(Clone)]
 pub struct Config {
     bot: Bot,
     owners: Vec<i64>,
-    ai_client: Arc<Client>,
+    client: Arc<GeminiClient>,
 }
 
 impl Config {
     pub async fn new() -> Self {
         dotenv().ok();
 
-        let bot_token = std::env::var("BOT_TOKEN").expect("BOT_TOKEN expected");
         let ai_key = std::env::var("GEMINI_API_KEY").expect("GEMINI_API_KEY expected");
+        let bot_token = std::env::var("BOT_TOKEN").expect("BOT_TOKEN expected");
         let bot = Bot::new(bot_token);
-        let ai_client = Client::new(ai_key);
 
         let owners: Vec<i64> = std::env::var("OWNERS")
             .expect("OWNERS expected")
@@ -28,7 +27,7 @@ impl Config {
         Config {
             bot,
             owners,
-            ai_client: Arc::new(ai_client),
+            client: Arc::new(GeminiClient::new(ai_key)),
         }
     }
 
@@ -40,7 +39,7 @@ impl Config {
         &self.owners
     }
 
-    pub fn get_ai_client(&self) -> &Client {
-        &self.ai_client
+    pub fn get_client(&self) -> Arc<GeminiClient> {
+        self.client.clone()
     }
 }
