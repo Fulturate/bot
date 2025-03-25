@@ -11,7 +11,7 @@ pub enum Audio {
 pub enum Command {
     #[command(description = "start command? :D")]
     Start,
-    #[command(description = "Speech recognition")]
+    #[command(description = "Speech recognition", alias = "sr")]
     SpeechRecognition,
 }
 

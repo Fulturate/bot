@@ -1,43 +1,58 @@
 use crate::config::Config;
 use crate::util::errors::MyError;
 use bytes::Bytes;
-use teloxide::Bot;
-use teloxide::payloads::SendMessageSetters;
+use std::time::Duration;
+use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
-use teloxide::types::{Message, MessageKind, ParseMode};
+use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
+use teloxide::Bot;
 
 use super::enums::AudioStruct;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
-    if let Some(file) = get_file_id(&msg) {
-        let file_data = save_file_to_memory(&bot, &file.file_id).await?;
-        let transcription = Transcription {
-            mime_type: file.mime_type,
-            data: file_data,
-            config: config.clone(),
-        };
+    let message = bot.send_message(msg.chat.id, "Подождите...")
+        .reply_parameters(ReplyParameters::new(msg.id))
+        .parse_mode(ParseMode::Html)
+        .await
+        .ok();
 
-        let message = bot
-            .send_message(msg.chat.id, "Подождите...")
-            .parse_mode(ParseMode::Html)
-            .await
-            .ok();
+    if let Some(message) = message {
+        if let Some(file) = get_file_id(&msg) {
+            let file_data = save_file_to_memory(&bot, &file.file_id).await?;
+            let transcription = Transcription {
+                mime_type: file.mime_type,
+                data: file_data,
+                config: config.clone(),
+            };
 
-        let text = transcription.to_text().await;
+            let text_parts = transcription.to_text().await;
 
-        bot.edit_message_text(
-            msg.chat.id,
-            message.unwrap().id,
-            format!(
-                "Транскрипция: {}",
-                text.first().unwrap_or(&String::from("Нет данных"))
-            ),
-        )
-        .await?;
-    } else {
-        bot.send_message(msg.chat.id, "Не удалось найти голосовое сообщение.")
-            .parse_mode(ParseMode::Html)
-            .await?;
+            bot.edit_message_text(
+                msg.chat.id,
+                message.id,
+                format!("<blockquote expandable>\n{}\n</blockquote>", text_parts[0]),
+            )
+                .parse_mode(ParseMode::Html)
+                .await?;
+
+            for part in text_parts.iter().skip(1) {
+                bot.send_message(
+                    msg.chat.id,
+                    format!("<blockquote expandable>\n{}\n</blockquote>", part),
+                )
+                    .reply_parameters(ReplyParameters::new(msg.id))
+                    .parse_mode(ParseMode::Html)
+                    .await?;
+            }
+        } else {
+            bot.edit_message_text(
+                msg.chat.id,
+                message.id,
+                "Не удалось найти голосовое сообщение.",
+            )
+                .parse_mode(ParseMode::Html)
+                .await?;
+        }
     }
     Ok(())
 }
@@ -97,65 +112,49 @@ pub struct Transcription {
 
 impl Transcription {
     pub async fn to_text(self) -> Vec<String> {
-        // self.data
-        // let content: Vec<u8> = fs::read("audio.ogg").unwrap();
         let settings = gem_rs::types::Settings::new();
-
         let mut client = gem_rs::client::GemSession::Builder()
             .model(gem_rs::api::Models::Custom(
                 "gemini-2.0-flash-thinking-exp".to_owned(),
             ))
+            .timeout(Duration::from_secs(120))
             .build();
-        // let ap = gem_rs::client::GemSession::from(self.config.get_client())
-        let response = client
-            .send_message_with_blob(
-                "Ретранслируй голосовое сообщение, при этом соблюдая оригинальный язык голосовухи",
-                gem_rs::types::Blob::new(&self.mime_type, &self.data),
-                gem_rs::types::Role::User,
-                &settings,
-            )
-            .await
-            .unwrap();
 
-        response.get_results()
-        // results[0];
-
-        // println!("{:#?}", results)
+        let mut attempts = 0;
+        let mut last_text = String::new();
+        while attempts < 5 {
+            match client
+                .send_message_with_blob(
+                    "Ретранслируй голосовое сообщение, при этом соблюдая оригинальный язык голосового сообщения",
+                    gem_rs::types::Blob::new(&self.mime_type, &self.data),
+                    gem_rs::types::Role::User,
+                    &settings,
+                )
+                .await
+            {
+                Ok(response) => {
+                    let full_text = response.get_results().first().unwrap_or(&String::from("Нет данных")).clone();
+                    if full_text == last_text {
+                        continue;
+                    }
+                    last_text = full_text.clone();
+                    return split_text(full_text, 4000);
+                }
+                Err(e) => {
+                    attempts += 1;
+                    eprintln!("{}", e);
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            }
+        }
+        vec!["Ошибка: не удалось выполнить транскрипцию после 5 попыток".to_string()]
     }
-    // pub async fn to_text(self) -> Result<String, Box<dyn Error>> {
-    //     let request = GenerateContentRequest {
-    //         contents: vec![Content {
-    //             parts: vec![ContentPart::Text(
-    //                 "Сделай транскрипцию голосового сообщения:\n".to_owned() + self.data.,
-    //             )],
-    //             role: Role::User,
-    //         }],
-    //         tools: None,
-    //     };
+}
 
-    //     let response = self
-    //         .config
-    //         .get_client()
-    //         .generate_content("gemini-2.0-flash-exp", &request)
-    //         .await?;
-
-    //     let response_string = Self::candidate_to_string(response.candidates);
-
-    //     println!("{}", response_string);
-    //     Ok(response_string)
-    // }
-
-    // fn candidate_to_string(candidates: Option<Vec<Candidate>>) -> String {
-    //     let mut response = String::new();
-    //     if let Some(candidates) = candidates {
-    //         for candidate in candidates {
-    //             for part in candidate.content.parts {
-    //                 if let PartResponse::Text(text) = part {
-    //                     response = text.clone();
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     response
-    // }
+fn split_text(text: String, chunk_size: usize) -> Vec<String> {
+    text.chars()
+        .collect::<Vec<_>>()
+        .chunks(chunk_size)
+        .map(|chunk| chunk.iter().collect())
+        .collect()
 }

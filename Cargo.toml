@@ -4,12 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-teloxide = { version = "0.12", features = ["macros", "auto-send", "rustls"] }
+teloxide = { version = "0.13.0", features = ["full"] }
 tokio = { version = "1", features = ["full"] }
 dotenv = "0.15"
 sysinfo = "0.33.1"
 reqwest = "0.11.27"
 bytes = "1.10.0"
-base64 = "0.13"
-mime = "0.3.17"
 gem-rs = "0.1.75"
