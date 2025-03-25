@@ -1,13 +1,13 @@
 mod config;
 mod handlers;
 mod loader;
+mod util;
 
 use crate::loader::run;
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
-    pretty_env_logger::init();
     println!("Bot starting...");
 
     match run().await {

@@ -1,11 +1,10 @@
 use crate::config::Config;
 use crate::handlers::messages::sound::audio::audio_handler;
 use crate::handlers::messages::sound::voice::voice_handler;
-use crate::loader::Error;
 use teloxide::prelude::Message;
 use teloxide::Bot;
 use crate::handlers::messages::sound::voice_note::voice_note_handler;
-
+use crate::util::errors::MyError;
 
 pub enum SoundEnum {
     Voice,
@@ -17,7 +16,7 @@ pub(crate) async fn sounds_handlers(
     bot: Bot,
     message: Message,
     config: &Config,
-) -> Result<(), Error> {
+) -> Result<(), MyError> {
     let sound_enum = if message.voice().is_some() {
         SoundEnum::Voice
     } else if message.video_note().is_some() {

@@ -1,14 +1,15 @@
 use crate::config::Config;
-use crate::handlers::commander::{command_handlers, Command};
+use crate::handlers::commander::{command_handlers};
 use crate::handlers::messages::messager::messages_handlers;
 use teloxide::dispatching::{Dispatcher, HandlerExt, UpdateFilterExt};
 use teloxide::dptree;
 use teloxide::prelude::Requester;
 use teloxide::types::Update;
 use teloxide::utils::command::BotCommands;
+use crate::util::enums::Command;
+use crate::util::errors::MyError;
 
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
-pub async fn run() -> Result<(), Error> {
+pub async fn run() -> Result<(), MyError> {
     let config = Config::new().await;
 
     let command_menu = Command::bot_commands();

@@ -1,12 +1,12 @@
 use crate::config::Config;
-use crate::loader::Error;
 use teloxide::prelude::*;
+use crate::util::errors::MyError;
 
 pub async fn speech_recognition_handler(
     bot: Bot,
     message: Message,
-    config: &Config,
-) -> Result<(), Error> {
+    _: &Config,
+) -> Result<(), MyError> {
     bot.send_message(message.chat.id, "Soon..").await?;
     Ok(())
 }

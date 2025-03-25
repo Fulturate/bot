@@ -1,11 +1,11 @@
 use crate::config::Config;
-use crate::loader::Error;
 use std::time::Instant;
 use sysinfo::System;
 use teloxide::prelude::*;
 use teloxide::types::ParseMode;
+use crate::util::errors::MyError;
 
-pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Result<(), Error> {
+pub async fn start_handler(bot: Bot, message: Message, _: &Config) -> Result<(), MyError> {
     let version = std::env::var("VERSION").unwrap_or_else(|_| "Unknown".to_string());
 
     let start_time = Instant::now();
