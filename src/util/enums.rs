@@ -14,3 +14,8 @@ pub enum Command {
     #[command(description = "Speech recognition")]
     SpeechRecognition,
 }
+
+pub struct AudioStruct {
+    pub mime_type: String,
+    pub file_id: String,
+}
