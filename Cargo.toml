@@ -8,5 +8,7 @@ teloxide = { version = "0.12", features = ["macros", "auto-send", "rustls"] }
 tokio = { version = "1", features = ["full"] }
 dotenv = "0.15"
 sysinfo = "0.33.1"
-gemini-rs = "1.1.0"
+google-generative-ai-rs = "0.3.4"
 reqwest = "0.11.27"
+bytes = "1.10.0"
+base64 = "0.13"

@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::handlers::messages::sounder::sounds_handlers;
+use crate::util::errors::MyError;
 use teloxide::prelude::Message;
 use teloxide::Bot;
-use crate::util::errors::MyError;
 
 pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), MyError> {
     let config = Config::new().await;

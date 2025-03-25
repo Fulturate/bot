@@ -1,10 +1,10 @@
 use crate::config::Config;
 use crate::handlers::commands::speech_recognition::speech_recognition_handler;
 use crate::handlers::commands::start::start_handler;
+use crate::util::enums::Command;
 use crate::util::errors::MyError;
 use teloxide::prelude::Message;
 use teloxide::Bot;
-use crate::util::enums::Command;
 
 pub(crate) async fn command_handlers(
     bot: Bot,
