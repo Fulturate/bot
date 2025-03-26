@@ -10,7 +10,7 @@ use teloxide::Bot;
 use super::enums::AudioStruct;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
-    let message = bot.send_message(msg.chat.id, "Подождите...")
+    let message = bot.send_message(msg.chat.id, "Обрабатываю аудио...")
         .reply_parameters(ReplyParameters::new(msg.id))
         .parse_mode(ParseMode::Html)
         .await
@@ -147,7 +147,7 @@ impl Transcription {
                 }
             }
         }
-        vec!["Ошибка: не удалось выполнить транскрипцию после 5 попыток".to_string()]
+        vec!["Ошибка: не удалось выполнить транскрипцию после 5 попыток.".to_string()]
     }
 }
 
