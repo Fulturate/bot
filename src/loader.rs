@@ -28,6 +28,10 @@ pub async fn run() -> Result<(), MyError> {
         .branch(command_handler)
         .branch(message_handler);
 
+    let bot_name = config.get_bot().get_my_name().await?;
+
+    println!("Bot name: {:?}", bot_name.name);
+
     Dispatcher::builder(config.get_bot().clone(), handlers)
         .enable_ctrlc_handler()
         .build()

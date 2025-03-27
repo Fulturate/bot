@@ -5,8 +5,8 @@ use sysinfo::System;
 use teloxide::prelude::*;
 use teloxide::types::ParseMode;
 
-pub async fn start_handler(bot: Bot, message: Message, _: &Config) -> Result<(), MyError> {
-    let version = std::env::var("VERSION").unwrap_or_else(|_| "Unknown".to_string());
+pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Result<(), MyError> {
+    let version = config.get_json_config().get_version();
 
     let start_time = Instant::now();
     bot.get_me().await?;

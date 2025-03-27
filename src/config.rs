@@ -1,10 +1,12 @@
 use dotenv::dotenv;
 use teloxide::prelude::*;
+use crate::util::json::{read_json_config, JsonConfig};
 
 #[derive(Clone)]
 pub struct Config {
     bot: Bot,
     owners: Vec<i64>,
+    json_config: JsonConfig
 }
 
 impl Config {
@@ -20,7 +22,9 @@ impl Config {
             .filter_map(|id| id.trim().parse().ok())
             .collect();
 
-        Config { bot, owners }
+        let json_config = read_json_config("config.json").expect("Unable to read config.json");
+
+        Config { bot, owners, json_config}
     }
 
     pub fn get_bot(&self) -> &Bot {
@@ -29,5 +33,9 @@ impl Config {
 
     pub fn get_owners(&self) -> &Vec<i64> {
         &self.owners
+    }
+
+    pub fn get_json_config(&self) -> &JsonConfig {
+        &self.json_config
     }
 }

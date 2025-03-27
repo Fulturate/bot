@@ -6,7 +6,7 @@ use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
 use teloxide::Bot;
-
+use crate::util::json::read_json_config;
 use super::enums::AudioStruct;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
@@ -113,29 +113,23 @@ pub struct Transcription {
 impl Transcription {
     pub async fn to_text(self) -> Vec<String> {
         let settings = gem_rs::types::Settings::new();
+        let error_answer = "❌ Не удалось преобразовать текст из аудиосообщения.".to_string();
+
+        let ai_model = self.config.get_json_config().get_ai_model().to_owned();
+        let prompt = self.config.get_json_config().get_ai_prompt().to_owned();
+
         let mut client = gem_rs::client::GemSession::Builder()
-            .model(gem_rs::api::Models::Custom(
-                "gemini-2.0-flash-thinking-exp".to_owned(),
-            ))
+            .model(gem_rs::api::Models::Custom(ai_model))
             .timeout(Duration::from_secs(120))
             .build();
 
         let mut attempts = 0;
         let mut last_text = String::new();
-        let prompt = "Твоя задача — переводить аудио в текст, автоматически определяя язык говорящего. \
-Убирай запинки, отступы и повторяющиеся слова. \
-Также уменьшай количество запятых, сохраняя смысл текста. \
-Транскрибируй текст из этого аудиосообщения, \
-а если это не речь, а звуки — описывай их в формате *описание*. \
-Не фильтруй и не стесняйся выражений, я беру всю ответственность на себя. \
-Ещё не пиши по типу 'Вот держите транскрипцию'. Просто пиши слова из аудиофайла.\n";
-        let error_answer = "❌ Не удалось преобразовать текст из аудиосообщения.".to_string();
-
 
         while attempts < 3 {
             match client
                 .send_message_with_blob(
-                    prompt,
+                    &prompt,
                     gem_rs::types::Blob::new(&self.mime_type, &self.data),
                     gem_rs::types::Role::User,
                     &settings,
@@ -152,8 +146,6 @@ impl Transcription {
                 }
                 Err(_) => {
                     attempts += 1;
-                    // eprintln!("{}", e);
-                    tokio::time::sleep(Duration::from_secs(2)).await;
                 }
             }
         }

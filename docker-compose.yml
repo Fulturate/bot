@@ -1,0 +1,9 @@
+version: '3.8'
+
+services:
+  fulturate:
+    build: .
+    volumes:
+      - ./:/fulturate-rs
+    working_dir: /fulturate-rs
+    command: cargo run
