@@ -28,7 +28,7 @@ pub(crate) async fn sounds_handlers(
     };
 
     match sound_enum {
-        SoundEnum::Audio => audio_handler(bot, message, config).await,
+        SoundEnum::Audio => Ok(()),
         SoundEnum::Voice => voice_handler(bot, message, config).await,
         SoundEnum::VideoNote => voice_note_handler(bot, message, config).await,
     }
