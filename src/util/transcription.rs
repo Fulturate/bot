@@ -122,10 +122,20 @@ impl Transcription {
 
         let mut attempts = 0;
         let mut last_text = String::new();
-        while attempts < 5 {
+        let prompt = "Твоя задача — переводить аудио в текст, автоматически определяя язык говорящего. \
+Убирай запинки, отступы и повторяющиеся слова. \
+Также уменьшай количество запятых, сохраняя смысл текста. \
+Транскрибируй текст из этого аудиосообщения, \
+а если это не речь, а звуки — описывай их в формате *описание*. \
+Не фильтруй и не стесняйся выражений, я беру всю ответственность на себя. \
+Ещё не пиши по типу 'Вот держите транскрипцию'. Просто пиши слова из аудиофайла.\n";
+        let error_answer = "❌ Не удалось преобразовать текст из аудиосообщения.".to_string();
+
+
+        while attempts < 3 {
             match client
                 .send_message_with_blob(
-                    "Твоя задача будет переводить аудио в текст. Тебе в этих голосовых нужно убрать запинки, отступы и повторяющиеся слова. Также нужно убрать большое кол-во запятых, при этом не меняя содержание текста.",
+                    prompt,
                     gem_rs::types::Blob::new(&self.mime_type, &self.data),
                     gem_rs::types::Role::User,
                     &settings,
@@ -133,21 +143,21 @@ impl Transcription {
                 .await
             {
                 Ok(response) => {
-                    let full_text = response.get_results().first().unwrap_or(&String::from("Нет данных")).clone();
+                    let full_text = response.get_results().first().unwrap_or(&error_answer).clone();
                     if full_text == last_text {
                         continue;
                     }
                     last_text = full_text.clone();
                     return split_text(full_text, 4000);
                 }
-                Err(e) => {
+                Err(_) => {
                     attempts += 1;
-                    eprintln!("{}", e);
+                    // eprintln!("{}", e);
                     tokio::time::sleep(Duration::from_secs(2)).await;
                 }
             }
         }
-        vec!["Ошибка: не удалось выполнить транскрипцию после 5 попыток.".to_string()]
+        vec![error_answer]
     }
 }
 
