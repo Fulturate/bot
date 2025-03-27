@@ -5,16 +5,11 @@ use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct JsonConfig {
-    pub version: String,
     pub ai_model: String,
     pub ai_prompt: String,
 }
 
 impl JsonConfig {
-    pub fn get_version(&self) -> &str {
-        &self.version
-    }
-
     pub fn get_ai_model(&self) -> &str {
         &self.ai_model
     }

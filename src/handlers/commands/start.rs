@@ -6,7 +6,7 @@ use teloxide::prelude::*;
 use teloxide::types::ParseMode;
 
 pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Result<(), MyError> {
-    let version = config.get_json_config().get_version();
+    let version = config.get_version();
 
     let start_time = Instant::now();
     bot.get_me().await?;
