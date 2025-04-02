@@ -3,7 +3,7 @@ use crate::util::errors::MyError;
 use std::time::Instant;
 use sysinfo::System;
 use teloxide::prelude::*;
-use teloxide::types::ParseMode;
+use teloxide::types::{ParseMode, ReplyParameters};
 
 pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Result<(), MyError> {
     let version = config.get_version();
@@ -30,6 +30,7 @@ pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Resul
     );
 
     bot.send_message(message.chat.id, response_message)
+        .reply_parameters(ReplyParameters::new(message.id))
         .parse_mode(ParseMode::Html)
         .await?;
     Ok(())
