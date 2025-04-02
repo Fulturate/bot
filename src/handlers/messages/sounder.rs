@@ -11,24 +11,25 @@ pub enum SoundEnum {
     Audio,
 }
 
-pub(crate) async fn sounds_handlers(
+pub(crate) async fn sound_handlers(
     bot: Bot,
     message: Message,
     config: &Config,
 ) -> Result<(), MyError> {
-    let sound_enum = if message.voice().is_some() {
-        SoundEnum::Voice
-    } else if message.video_note().is_some() {
-        SoundEnum::VideoNote
-    } else if message.audio().is_some() {
-        SoundEnum::Audio
-    } else {
-        return Ok(());
-    };
+    let config = config.clone();
+    tokio::spawn(async move {
+        let sound = match (message.voice(), message.video_note(), message.audio()) {
+            (Some(_), _, _) => SoundEnum::Voice,
+            (_, Some(_), _) => SoundEnum::VideoNote,
+            (_, _, Some(_)) => SoundEnum::Audio,
+            _ => return Ok(()),
+        };
 
-    match sound_enum {
-        SoundEnum::Audio => Ok(()),
-        SoundEnum::Voice => voice_handler(bot, message, config).await,
-        SoundEnum::VideoNote => voice_note_handler(bot, message, config).await,
-    }
+        match sound {
+            SoundEnum::Audio => Ok(()),
+            SoundEnum::Voice => voice_handler(bot, message, &config).await,
+            SoundEnum::VideoNote => voice_note_handler(bot, message, &config).await,
+        }
+    });
+    Ok(())
 }

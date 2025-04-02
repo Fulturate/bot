@@ -16,7 +16,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .ok();
 
     if let Some(message) = message {
-        if let Some(file) = get_file_id(&msg) {
+        if let Some(file) = get_file_id(&msg).await {
             let file_data = save_file_to_memory(&bot, &file.file_id).await?;
             let transcription = Transcription {
                 mime_type: file.mime_type,
@@ -56,7 +56,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
     Ok(())
 }
 
-pub fn get_file_id(msg: &Message) -> Option<AudioStruct> {
+pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
     match &msg.kind {
         MessageKind::Common(common) => match &common.media_kind {
             teloxide::types::MediaKind::Audio(audio) => Some(AudioStruct {

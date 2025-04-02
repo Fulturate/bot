@@ -5,6 +5,7 @@ use crate::util::enums::Command;
 use crate::util::errors::MyError;
 use teloxide::prelude::Message;
 use teloxide::Bot;
+use tokio::task;
 
 pub(crate) async fn command_handlers(
     bot: Bot,
@@ -12,8 +13,11 @@ pub(crate) async fn command_handlers(
     cmd: Command,
 ) -> Result<(), MyError> {
     let config = Config::new().await;
-    match cmd {
-        Command::Start => start_handler(bot, message, &config).await,
-        Command::SpeechRecognition => speech_recognition_handler(bot, message, &config).await,
-    }
+    task::spawn(async move {
+        match cmd {
+            Command::Start => start_handler(bot, message, &config).await,
+            Command::SpeechRecognition => speech_recognition_handler(bot, message, &config).await,
+        }
+    });
+    Ok(())
 }
