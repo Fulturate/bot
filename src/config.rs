@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use dotenv::dotenv;
 use teloxide::prelude::*;
+use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
 use crate::util::json::{read_json_config, JsonConfig};
 
 #[derive(Clone)]
@@ -7,7 +9,8 @@ pub struct Config {
     bot: Bot,
     owners: Vec<i64>,
     version: String,
-    json_config: JsonConfig
+    json_config: JsonConfig,
+    currency_converter: Arc<CurrencyConverter>
 }
 
 impl Config {
@@ -25,8 +28,9 @@ impl Config {
             .collect();
 
         let json_config = read_json_config("config.json").expect("Unable to read config.json");
+        let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
 
-        Config { bot, owners, version, json_config}
+        Config { bot, owners, version, json_config, currency_converter }
     }
 
     pub fn get_bot(&self) -> &Bot {
@@ -43,5 +47,9 @@ impl Config {
 
     pub fn get_json_config(&self) -> &JsonConfig {
         &self.json_config
+    }
+
+    pub fn get_currency_converter(&self) -> &CurrencyConverter {
+        &self.currency_converter
     }
 }
