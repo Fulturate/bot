@@ -1,0 +1,74 @@
+[
+  {
+    "code": "RUB",
+    "symbol": "₽",
+    "flag": "🇷🇺",
+    "patterns": ["rub", "руб", "рубл", "рублей", "рубль", "рубля", "₽", "ruble", "rubles"],
+    "one": "рубль",
+    "few": "рубля",
+    "many": "рублей",
+    "one_en": "ruble",
+    "many_en": "rubles",
+    "is_target": false
+  },
+  {
+    "code": "UAH",
+    "symbol": "₴",
+    "flag": "🇺🇦",
+    "patterns": ["uah", "грн", "гривен", "гривні", "гривня", "гривны", "₴", "hryvnia", "hryvnias"],
+    "one": "гривна",
+    "few": "гривны",
+    "many": "гривен",
+    "one_en": "hryvnia",
+    "many_en": "hryvnias",
+    "is_target": true
+  },
+  {
+    "code": "EUR",
+    "symbol": "€",
+    "flag": "🇪🇺",
+    "patterns": ["eur", "евро", "євро", "€", "euro", "euros"],
+    "one": "евро",
+    "few": "евро",
+    "many": "евро",
+    "one_en": "euro",
+    "many_en": "euros",
+    "is_target": true
+  },
+  {
+    "code": "USD",
+    "symbol": "$",
+    "flag": "🇺🇸",
+    "patterns": ["usd", "доллар", "долар", "$", "dollar", "dollars", "доллара", "долларов"],
+    "one": "доллар",
+    "few": "доллара",
+    "many": "долларов",
+    "one_en": "dollar",
+    "many_en": "dollars",
+    "is_target": true
+  },
+  {
+    "code": "BYN",
+    "symbol": "Br",
+    "flag": "🇧🇾",
+    "patterns": ["byn", "бел", "белруб", "br", "бел. рубль", "бел. рубля", "бел. рублей", "belarusian ruble", "belarusian rubles"],
+    "one": "бел. рубль",
+    "few": "бел. рубля",
+    "many": "бел. рублей",
+    "one_en": "Belarusian ruble",
+    "many_en": "Belarusian rubles",
+    "is_target": true
+  },
+  {
+    "code": "GBP",
+    "symbol": "£",
+    "flag": "🇬🇧",
+    "patterns": ["gbp", "фунт", "£", "pound", "pounds", "фунта", "фунтов", "pound sterling"],
+    "one": "фунт",
+    "few": "фунта",
+    "many": "фунтов",
+    "one_en": "pound",
+    "many_en": "pounds",
+    "is_target": true
+  }
+]
