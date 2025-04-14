@@ -1,5 +1,9 @@
-# Fulturate-rs - Telegram Utility Bot 🤖
-(Currently, the bot is in Russian. The next version**s** will include a 100% language switcher.)
+<div align="center">
+  <img src="https://cdn.discordapp.com/attachments/724983669114142751/1360308510776365208/channels4_profile.jpg?ex=67faa586&is=67f95406&hm=cfaeb099ed839a192375f8c1a4cf611460701eb2141789e1483e46d4780d6a26&" width="150">
+  <h1>Fulturate-rs - Telegram Utility Bot 🤖</h1>
+  (Currently, the bot is in Russian. The next version**s** will include a 100% language switcher.)
+</div>
+=======
 
 ## ✨ Features:
 - **Speech Recognition** 🎤: Convert spoken words into text for a more interactive experience.
