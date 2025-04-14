@@ -29,8 +29,11 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
             let text_to_process = text;
 
             match converter.process_text(text_to_process).await {
-                Ok(results) => {
+                Ok(mut results) => {
                     if !results.is_empty() {
+                        if results.len() > 5 {
+                            results.truncate(5);
+                        }
                         let formatted_blocks: Vec<String> = results
                             .into_iter()
                             .map(|result_block| {
