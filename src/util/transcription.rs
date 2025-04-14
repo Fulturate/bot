@@ -1,3 +1,4 @@
+use super::enums::AudioStruct;
 use crate::config::Config;
 use crate::util::errors::MyError;
 use bytes::Bytes;
@@ -6,7 +7,6 @@ use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
 use teloxide::Bot;
-use super::enums::AudioStruct;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot.send_message(msg.chat.id, "Обрабатываю аудио...")
@@ -29,9 +29,10 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
             bot.edit_message_text(
                 msg.chat.id,
                 message.id,
-                format!("<blockquote expandable>\n{}\n</blockquote>", text_parts[0]),
+                format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
                 .parse_mode(ParseMode::Html)
+                // .reply_markup(delete_message_button())
                 .await?;
 
             for part in text_parts.iter().skip(1) {
@@ -41,6 +42,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 )
                     .reply_parameters(ReplyParameters::new(msg.id))
                     .parse_mode(ParseMode::Html)
+                    // .reply_markup(delete_message_button())
                     .await?;
             }
         } else {
@@ -50,6 +52,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 "Не удалось найти голосовое сообщение.",
             )
                 .parse_mode(ParseMode::Html)
+                // .reply_markup(delete_message_button())
                 .await?;
         }
     }
