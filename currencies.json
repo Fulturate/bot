@@ -1,17 +1,5 @@
 [
   {
-    "code": "RUB",
-    "symbol": "₽",
-    "flag": "🇷🇺",
-    "patterns": ["rub", "руб", "рубл", "рублей", "рубль", "рубля", "₽", "ruble", "rubles"],
-    "one": "рубль",
-    "few": "рубля",
-    "many": "рублей",
-    "one_en": "ruble",
-    "many_en": "rubles",
-    "is_target": true
-  },
-  {
     "code": "UAH",
     "symbol": "₴",
     "flag": "🇺🇦",
@@ -21,6 +9,18 @@
     "many": "гривен",
     "one_en": "hryvnia",
     "many_en": "hryvnias",
+    "is_target": true
+  },
+  {
+    "code": "RUB",
+    "symbol": "₽",
+    "flag": "🇷🇺",
+    "patterns": ["rub", "руб", "рубл", "рублей", "рубль", "рубля", "₽", "ruble", "rubles"],
+    "one": "рубль",
+    "few": "рубля",
+    "many": "рублей",
+    "one_en": "ruble",
+    "many_en": "rubles",
     "is_target": true
   },
   {
