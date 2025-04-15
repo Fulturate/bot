@@ -218,7 +218,7 @@ impl CurrencyConverter {
                 get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
             }
         };
-        result.push_str(&format!( "{} {:.2}{} {}\n", original_info.flag, original.amount, original_info.symbol, original_word ));
+        result.push_str(&format!( "{} {:.2}{} {}\n\n", original_info.flag, original.amount, original_info.symbol, original_word ));
 
         for target_code in &self.target_currencies {
             if target_code == &original.currency_code { continue; }
