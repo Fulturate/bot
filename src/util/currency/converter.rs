@@ -19,7 +19,7 @@ const CURRENCY_CONFIG_PATH: &str = "currencies.json";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputLanguage {
     Russian,
-    English,
+    // English,
 }
 
 #[derive(Error, Debug)]
@@ -31,12 +31,8 @@ pub enum ConvertError {
     #[error("API returned an error: {0}")]
     ApiError(String),
     #[error("Cache lock poisoned")]
-    CacheLockError,
-    #[error("Currency code not found or not supported for formatting: {0}")]
     CurrencyNotFound(String),
     #[error("Invalid currency format detected during parsing")]
-    InvalidCurrencyFormat,
-    #[error("Could not find rate for currency {0} in API response")]
     RateNotFound(String),
     #[error("Internal error: {0}")]
     InternalError(String),
@@ -49,7 +45,6 @@ pub enum ConvertError {
 #[derive(Deserialize, Debug, Clone)]
 struct ApiResponse {
     result: String,
-    time_last_update_unix: i64,
     base_code: String,
     rates: HashMap<String, f64>,
 }
@@ -71,7 +66,9 @@ struct CurrencyConfig {
     one: String,
     few: String,
     many: String,
+    #[warn(dead_code)] // TODO: English Support
     one_en: String,
+    #[warn(dead_code)]
     many_en: String,
     is_target: bool,
 }
@@ -102,11 +99,6 @@ fn get_plural_form(number: u64, one: &str, few: &str, many: &str) -> String {
     else if last_digit == 1 { one.to_string() }
     else if last_digit >= 2 && last_digit <= 4 { few.to_string() }
     else { many.to_string() }
-}
-
-fn get_plural_form_en(number: f64, one_en: &str, many_en: &str) -> String {
-    if number == 1.0 { one_en.to_string() }
-    else { many_en.to_string() }
 }
 
 impl CurrencyConverter {
@@ -214,9 +206,9 @@ impl CurrencyConverter {
                 let amount_int = original.amount.trunc() as u64;
                 get_plural_form(amount_int, &original_info.one, &original_info.few, &original_info.many)
             }
-            OutputLanguage::English => {
-                get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
-            }
+            // OutputLanguage::English => {
+            //     get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
+            // }
         };
         result.push_str(&format!( "{} {:.2}{} {}\n\n", original_info.flag, original.amount, original_info.symbol, original_word ));
 
@@ -231,9 +223,9 @@ impl CurrencyConverter {
                                 let amount_int = converted_amount.trunc() as u64;
                                 get_plural_form(amount_int, &target_info.one, &target_info.few, &target_info.many)
                             }
-                            OutputLanguage::English => {
-                                get_plural_form_en(converted_amount, &target_info.one_en, &target_info.many_en)
-                            }
+                            // OutputLanguage::English => {
+                            //     get_plural_form_en(converted_amount, &target_info.one_en, &target_info.many_en)
+                            // }
                         };
                         result.push_str(&format!( "{} {:.2}{} {}\n", target_info.flag, converted_amount, target_info.symbol, word ));
                     }
@@ -265,15 +257,6 @@ impl CurrencyConverter {
             }
         }
         Ok(results)
-    }
-
-    pub async fn convert_direct(&self, amount: f64, currency_code: &str) -> Result<String, ConvertError> {
-        if self.find_currency_info(currency_code).is_none() {
-            return Err(ConvertError::CurrencyNotFound(currency_code.to_string()));
-        }
-        let rates_data = self.get_rates().await?;
-        let detected = DetectedCurrency { amount, currency_code: currency_code.to_string() };
-        self.format_conversion_result(&detected, &rates_data)
     }
 
     pub(crate) fn parse_text_for_currencies(&self, text: &str) -> Result<Vec<DetectedCurrency>, ConvertError> {
