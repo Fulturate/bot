@@ -1,11 +1,5 @@
 use teloxide::macros::BotCommands;
 
-pub enum Audio {
-    Voice,
-    Sound,
-    Audio,
-}
-
 #[derive(BotCommands, Clone)]
 #[command(rename_rule = "lowercase")]
 pub enum Command {
