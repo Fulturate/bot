@@ -126,7 +126,7 @@ impl Transcription {
             .build();
 
         let mut attempts = 0;
-        let last_text = String::new();
+        let mut last_text = String::new();
 
         while attempts < 3 {
             match client
@@ -144,6 +144,7 @@ impl Transcription {
                     if full_text == last_text && !full_text.is_empty() {
                         continue;
                     }
+                    last_text = full_text.clone();
 
                     if !full_text.is_empty() {
                         return split_text(full_text, 4000);
