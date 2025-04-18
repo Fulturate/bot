@@ -14,8 +14,14 @@ pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Resul
 
     let mut system_info = System::new_all();
     system_info.refresh_all();
-    let total_ram_mb = system_info.total_memory() / 1024 / 1024;
-    let used_ram_mb = (system_info.total_memory() - system_info.free_memory()) / 1024 / 1024;
+
+    let total_ram_bytes = system_info.total_memory();
+    let used_ram_bytes = system_info.used_memory();
+
+
+    let total_ram_mb = (total_ram_bytes as f64 / (1024.0 * 1024.0)) as u64; // tried to use "as"
+    let used_ram_mb = (used_ram_bytes as f64 / (1024.0 * 1024.0)) as u64;
+
     let cpu_usage_percent = system_info.global_cpu_usage();
 
     let response_message = format!(
