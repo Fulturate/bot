@@ -115,7 +115,7 @@ pub struct Transcription {
 impl Transcription {
     pub async fn to_text(self) -> Vec<String> {
         let settings = gem_rs::types::Settings::new();
-        let error_answer = "❌ Не удалось преобразовать текст из аудиосообщения.".to_string();
+        let error_answer = "❌ Не удалось преобразовать текст из сообщения.".to_string();
 
         let ai_model = self.config.get_json_config().get_ai_model().to_owned();
         let prompt = self.config.get_json_config().get_ai_prompt().to_owned();
@@ -127,6 +127,7 @@ impl Transcription {
 
         let mut attempts = 0;
         let mut last_text = String::new();
+        let mut last_error = String::new();
 
         while attempts < 3 {
             match client
@@ -155,11 +156,17 @@ impl Transcription {
                 }
                 Err(error) => {
                     attempts += 1;
+
+                    if error.to_string() == last_error {
+                        continue;
+                    }
+                    last_error = error.to_string();
+
                     eprintln!("Error with transcription (attempt {}): {:?}", attempts, error);
                 }
             }
         }
-        vec![error_answer]
+        vec![error_answer + "\n\n" + &last_error]
     }
 }
 
