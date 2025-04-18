@@ -41,8 +41,8 @@ impl Config {
         &self.version
     }
 
-    pub fn get_owners(&self) -> &Vec<i64> {
-        &self.owners
+    pub fn is_id_in_owners(&self, id: i64) -> bool {
+        self.owners.contains(&id)
     }
 
     pub fn get_json_config(&self) -> &JsonConfig {

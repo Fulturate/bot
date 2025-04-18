@@ -126,7 +126,7 @@ impl Transcription {
             .build();
 
         let mut attempts = 0;
-        let mut last_text = String::new();
+        let last_text = String::new();
 
         while attempts < 3 {
             match client
@@ -139,15 +139,22 @@ impl Transcription {
                 .await
             {
                 Ok(response) => {
-                    let full_text = response.get_results().first().unwrap_or(&error_answer).clone();
-                    if full_text == last_text {
+                    let full_text = response.get_results().first().cloned().unwrap_or_else(|| "".to_string());
+
+                    if full_text == last_text && !full_text.is_empty() {
                         continue;
                     }
-                    last_text = full_text.clone();
-                    return split_text(full_text, 4000);
+
+                    if !full_text.is_empty() {
+                        return split_text(full_text, 4000);
+                    } else {
+                        attempts += 1;
+                        eprintln!("Received empty successful response from transcription service, attempt {}", attempts);
+                    }
                 }
-                Err(_) => {
+                Err(error) => {
                     attempts += 1;
+                    eprintln!("Error with transcription (attempt {}): {:?}", attempts, error);
                 }
             }
         }
@@ -156,6 +163,9 @@ impl Transcription {
 }
 
 fn split_text(text: String, chunk_size: usize) -> Vec<String> {
+    if text.is_empty() {
+        return vec![];
+    }
     text.chars()
         .collect::<Vec<_>>()
         .chunks(chunk_size)
