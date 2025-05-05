@@ -1,12 +1,13 @@
 use crate::config::Config;
 use crate::handlers::messages::sounder::sound_handlers;
 use crate::util::errors::MyError;
-use teloxide::prelude::Message;
-use teloxide::Bot;
 use teloxide::payloads::SendMessageSetters;
+use teloxide::prelude::Message;
 use teloxide::requests::Requester;
 use teloxide::types::{ParseMode, ReplyParameters};
+use teloxide::Bot;
 use tokio::task;
+use crate::util::inline::delete_message_button;
 
 pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), MyError> {
     let config = Config::new().await;
@@ -20,7 +21,8 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
         let message = message_clone;
         let config = config_clone;
 
-        if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some() {
+        if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some()
+        {
             if let Err(e) = sound_handlers(bot, message, &config).await {
                 eprintln!("Sound handler failed: {:?}", e);
             }
@@ -44,9 +46,10 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
 
                         let final_message = formatted_blocks.join("\n");
 
-                        if let Err(e) = bot.send_message(message.chat.id, final_message)
+                        if let Err(e) = bot
+                            .send_message(message.chat.id, final_message)
                             .parse_mode(ParseMode::Html)
-                            // .reply_markup(delete_message_button())
+                            .reply_markup(delete_message_button())
                             .reply_parameters(ReplyParameters::new(message.id))
                             .await
                         {

@@ -1,12 +1,13 @@
 use super::enums::AudioStruct;
 use crate::config::Config;
 use crate::util::errors::MyError;
+use crate::util::inline::delete_message_button;
 use bytes::Bytes;
 use std::time::Duration;
-use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
+use teloxide::Bot;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot
@@ -33,7 +34,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
             .parse_mode(ParseMode::Html)
-            // .reply_markup(delete_message_button())
+            .reply_markup(delete_message_button())
             .await?;
 
             for part in text_parts.iter().skip(1) {
@@ -43,7 +44,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 )
                 .reply_parameters(ReplyParameters::new(msg.id))
                 .parse_mode(ParseMode::Html)
-                // .reply_markup(delete_message_button())
+                .reply_markup(delete_message_button())
                 .await?;
             }
         } else {
@@ -123,7 +124,7 @@ impl Transcription {
 
         let mut client = gem_rs::client::GemSession::Builder()
             .model(gem_rs::api::Models::Custom(ai_model))
-            .timeout(Some(Duration::from_secs(120)))
+            .timeout(Duration::from_secs(120))
             .build();
 
         let mut attempts = 0;

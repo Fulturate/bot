@@ -18,7 +18,6 @@ pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Resul
     let total_ram_bytes = system_info.total_memory();
     let used_ram_bytes = system_info.used_memory();
 
-
     let total_ram_mb = (total_ram_bytes as f64 / (1024.0 * 1024.0)) as u64; // tried to use "as"
     let used_ram_mb = (used_ram_bytes as f64 / (1024.0 * 1024.0)) as u64;
 

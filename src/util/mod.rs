@@ -1,5 +1,6 @@
+pub mod currency;
 pub mod enums;
 pub mod errors;
-pub mod transcription;
+pub mod inline;
 pub mod json;
-pub mod currency;
+pub mod transcription;

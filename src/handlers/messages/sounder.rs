@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::handlers::messages::sound::{voice::voice_handler, voice_note::voice_note_handler};
 use crate::util::errors::MyError;
-use teloxide::Bot;
 use teloxide::prelude::Message;
+use teloxide::Bot;
 
 pub(crate) async fn sound_handlers(
     bot: Bot,
