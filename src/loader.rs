@@ -1,8 +1,6 @@
 use crate::config::Config;
-use crate::handlers::commander::command_handlers;
-use crate::handlers::messages::messager::messages_handlers;
-use crate::util::enums::Command;
-use crate::util::errors::MyError;
+use crate::handlers::{commander::command_handlers, messages::messager::messages_handlers};
+use crate::util::{enums::Command, errors::MyError};
 use teloxide::dispatching::{Dispatcher, HandlerExt, UpdateFilterExt};
 use teloxide::dptree;
 use teloxide::prelude::Requester;

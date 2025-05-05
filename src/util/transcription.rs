@@ -3,13 +3,14 @@ use crate::config::Config;
 use crate::util::errors::MyError;
 use bytes::Bytes;
 use std::time::Duration;
+use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
-use teloxide::Bot;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
-    let message = bot.send_message(msg.chat.id, "Обрабатываю аудио...")
+    let message = bot
+        .send_message(msg.chat.id, "Обрабатываю аудио...")
         .reply_parameters(ReplyParameters::new(msg.id))
         .parse_mode(ParseMode::Html)
         .await
@@ -31,19 +32,19 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
-                .parse_mode(ParseMode::Html)
-                // .reply_markup(delete_message_button())
-                .await?;
+            .parse_mode(ParseMode::Html)
+            // .reply_markup(delete_message_button())
+            .await?;
 
             for part in text_parts.iter().skip(1) {
                 bot.send_message(
                     msg.chat.id,
                     format!("<blockquote expandable>\n{}\n</blockquote>", part),
                 )
-                    .reply_parameters(ReplyParameters::new(msg.id))
-                    .parse_mode(ParseMode::Html)
-                    // .reply_markup(delete_message_button())
-                    .await?;
+                .reply_parameters(ReplyParameters::new(msg.id))
+                .parse_mode(ParseMode::Html)
+                // .reply_markup(delete_message_button())
+                .await?;
             }
         } else {
             bot.edit_message_text(
@@ -51,9 +52,9 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 "Не удалось найти голосовое сообщение.",
             )
-                .parse_mode(ParseMode::Html)
-                // .reply_markup(delete_message_button())
-                .await?;
+            .parse_mode(ParseMode::Html)
+            // .reply_markup(delete_message_button())
+            .await?;
         }
     }
     Ok(())
@@ -113,7 +114,7 @@ pub struct Transcription {
 }
 
 impl Transcription {
-    pub async fn to_text(self) -> Vec<String> {
+    pub async fn to_text(&self) -> Vec<String> {
         let settings = gem_rs::types::Settings::new();
         let error_answer = "❌ Не удалось преобразовать текст из сообщения.".to_string();
 
@@ -122,7 +123,7 @@ impl Transcription {
 
         let mut client = gem_rs::client::GemSession::Builder()
             .model(gem_rs::api::Models::Custom(ai_model))
-            .timeout(Duration::from_secs(120))
+            .timeout(Some(Duration::from_secs(120)))
             .build();
 
         let mut attempts = 0;
@@ -140,7 +141,11 @@ impl Transcription {
                 .await
             {
                 Ok(response) => {
-                    let full_text = response.get_results().first().cloned().unwrap_or_else(|| "".to_string());
+                    let full_text = response
+                        .get_results()
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| "".to_string());
 
                     if full_text == last_text && !full_text.is_empty() {
                         continue;
@@ -151,7 +156,10 @@ impl Transcription {
                         return split_text(full_text, 4000);
                     } else {
                         attempts += 1;
-                        eprintln!("Received empty successful response from transcription service, attempt {}", attempts);
+                        eprintln!(
+                            "Received empty successful response from transcription service, attempt {}",
+                            attempts
+                        );
                     }
                 }
                 Err(error) => {
@@ -162,7 +170,10 @@ impl Transcription {
                     }
                     last_error = error.to_string();
 
-                    eprintln!("Error with transcription (attempt {}): {:?}", attempts, error);
+                    eprintln!(
+                        "Error with transcription (attempt {}): {:?}",
+                        attempts, error
+                    );
                 }
             }
         }
