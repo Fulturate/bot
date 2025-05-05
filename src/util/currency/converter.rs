@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
-    sync::{Arc},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -80,8 +80,8 @@ pub struct DetectedCurrency {
 }
 
 static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)(\d+(?:[.,]\d+)?)\s*([a-zA-Zа-яА-Я€$₽₴£]+(?:[\.\s]*(?:рубл[ьяей]*|ruble[s]?|hryvnia[s]?|euro[s]?|dollar[s]?|pound[s]?))?)|([€$₽₴£])\s*(\d+(?:[.,]\d+)?)")
-        .expect("Invalid Regex")
+    Regex::new(r"(?i)\b(\d+(?:[.,]\d+)?)\s*\b(USD|EUR|RUB|UAH|GBP|BYN|KZT|JPY|CNY|CHF|CAD|AUD|SEK|NOK|TRY|INR|BRL|BDT|AED|PLN|CZK|ILS|ZAR|руб(?:лей|ля|ль|л)?|р\.|коп(?:еек|ейки|ейка)?|гривен|гривні|грн\.?|hryvnia[s]?|доллар(?:а|ов)?|баксов|dollar[s]?|евро|євро|euro[s]?|фунт(?:а|ов)?|pound[s]?|стерлингов|иен[аы]?|yen|юан(?:[ьяей]*)?|yuan|тенге|tenge|лир[аы]?|lira|франк(?:а|ов)?|frank[s]?|кро[нн](?:[аы]|он)?|krona[s]?|шекел(?:ей|я)?|shekel[s]?|злотых|zloty|динар(?:а|ов)?|dinar|форинт(?:а|ов)?|forint|бата|baht|вон(?:а|ы)?|won|песо|peso|реал(?:а|ов)?|real|така|taka[s]?)\b|([€$₽₴£¥֏₺₪₹₩₸])\s*\b(\d+(?:[.,]\d+)?)")
+            .expect("Invalid Regex")
 });
 
 pub struct CurrencyConverter {
@@ -95,10 +95,15 @@ pub struct CurrencyConverter {
 fn get_plural_form(number: u64, one: &str, few: &str, many: &str) -> String {
     let last_two_digits = number % 100;
     let last_digit = number % 10;
-    if last_two_digits >= 11 && last_two_digits <= 19 { many.to_string() }
-    else if last_digit == 1 { one.to_string() }
-    else if last_digit >= 2 && last_digit <= 4 { few.to_string() }
-    else { many.to_string() }
+    if last_two_digits >= 11 && last_two_digits <= 19 {
+        many.to_string()
+    } else if last_digit == 1 {
+        one.to_string()
+    } else if last_digit >= 2 && last_digit <= 4 {
+        few.to_string()
+    } else {
+        many.to_string()
+    }
 }
 
 impl CurrencyConverter {
@@ -114,12 +119,24 @@ impl CurrencyConverter {
         let mut target_codes = Vec::new();
 
         for currency in currencies {
-            if currency.is_target { target_codes.push(currency.code.clone()); }
+            if currency.is_target {
+                target_codes.push(currency.code.clone());
+            }
             currency_map.insert(currency.code.clone(), currency);
         }
 
-        if currency_map.is_empty() { eprintln!("Warning: No currency configurations loaded from {}.", config_path_str); }
-        if target_codes.is_empty() { eprintln!("Warning: No target currencies defined in {}.", config_path_str); }
+        if currency_map.is_empty() {
+            eprintln!(
+                "Warning: No currency configurations loaded from {}.",
+                config_path_str
+            );
+        }
+        if target_codes.is_empty() {
+            eprintln!(
+                "Warning: No target currencies defined in {}.",
+                config_path_str
+            );
+        }
 
         Ok(CurrencyConverter {
             cache: Arc::new(Mutex::new(None)),
@@ -134,12 +151,21 @@ impl CurrencyConverter {
         let response = self.client.get(API_URL).send().await?;
         let status = response.status();
         if !status.is_success() {
-            let text = response.text().await.unwrap_or_else(|_| "Failed to get error body".to_string());
-            return Err(ConvertError::ApiError(format!("API request failed with status {}: {}", status, text)));
+            let text = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "Failed to get error body".to_string());
+            return Err(ConvertError::ApiError(format!(
+                "API request failed with status {}: {}",
+                status, text
+            )));
         }
         let api_response = response.json::<ApiResponse>().await?;
         if api_response.result != "success" {
-            return Err(ConvertError::ApiError(format!("API indicated failure. Result: {}", api_response.result)));
+            return Err(ConvertError::ApiError(format!(
+                "API indicated failure. Result: {}",
+                api_response.result
+            )));
         }
         Ok(api_response)
     }
@@ -174,7 +200,9 @@ impl CurrencyConverter {
 
     fn find_currency_info_by_identifier(&self, identifier: &str) -> Option<&CurrencyConfig> {
         let lower_identifier = identifier.to_lowercase().replace(['.', ' '], "");
-        let clean_identifier = if lower_identifier.starts_with("belarusian") && lower_identifier.contains("ruble") {
+        let clean_identifier = if lower_identifier.starts_with("belarusian")
+            && lower_identifier.contains("ruble")
+        {
             "belarusianruble"
         } else if lower_identifier.starts_with("бел") && lower_identifier.contains("руб") {
             "белруб"
@@ -183,71 +211,138 @@ impl CurrencyConverter {
         };
 
         self.currency_info.values().find(|info| {
-            info.patterns.iter().any(|p| p.replace(['.', ' '], "") == clean_identifier)
+            info.patterns
+                .iter()
+                .any(|p| p.replace(['.', ' '], "") == clean_identifier)
                 || info.symbol == identifier
         })
     }
 
-    fn convert_amount( amount: f64, from_code: &str, to_code: &str, rates_map: &HashMap<String, f64>, base_code: &str) -> Result<f64, ConvertError> {
-        if from_code == to_code { return Ok(amount); }
-        let rate_from = if from_code == base_code { 1.0 } else { *rates_map.get(from_code).ok_or_else(|| ConvertError::RateNotFound(from_code.to_string()))? };
-        let rate_to = if to_code == base_code { 1.0 } else { *rates_map.get(to_code).ok_or_else(|| ConvertError::RateNotFound(to_code.to_string()))? };
-        if rate_from == 0.0 { return Err(ConvertError::InternalError(format!("Rate for base currency '{}' is zero.", from_code))); }
+    fn convert_amount(
+        amount: f64,
+        from_code: &str,
+        to_code: &str,
+        rates_map: &HashMap<String, f64>,
+        base_code: &str,
+    ) -> Result<f64, ConvertError> {
+        if from_code == to_code {
+            return Ok(amount);
+        }
+        let rate_from = if from_code == base_code {
+            1.0
+        } else {
+            *rates_map
+                .get(from_code)
+                .ok_or_else(|| ConvertError::RateNotFound(from_code.to_string()))?
+        };
+        let rate_to = if to_code == base_code {
+            1.0
+        } else {
+            *rates_map
+                .get(to_code)
+                .ok_or_else(|| ConvertError::RateNotFound(to_code.to_string()))?
+        };
+        if rate_from == 0.0 {
+            return Err(ConvertError::InternalError(format!(
+                "Rate for base currency '{}' is zero.",
+                from_code
+            )));
+        }
         Ok(amount * (rate_to / rate_from))
     }
 
-    fn format_conversion_result( &self, original: &DetectedCurrency, rates_data: &ApiResponse ) -> Result<String, ConvertError> {
+    fn format_conversion_result(
+        &self,
+        original: &DetectedCurrency,
+        rates_data: &ApiResponse,
+    ) -> Result<String, ConvertError> {
         let mut result = String::new();
-        let original_info = self.find_currency_info(&original.currency_code)
+        let original_info = self
+            .find_currency_info(&original.currency_code)
             .ok_or_else(|| ConvertError::CurrencyNotFound(original.currency_code.clone()))?;
 
         let original_word = match self.language {
             OutputLanguage::Russian => {
                 let amount_int = original.amount.trunc() as u64;
-                get_plural_form(amount_int, &original_info.one, &original_info.few, &original_info.many)
-            }
-            // OutputLanguage::English => {
-            //     get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
-            // }
+                get_plural_form(
+                    amount_int,
+                    &original_info.one,
+                    &original_info.few,
+                    &original_info.many,
+                )
+            } // OutputLanguage::English => {
+              //     get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
+              // }
         };
-        result.push_str(&format!( "{} {:.2}{} {}\n\n", original_info.flag, original.amount, original_info.symbol, original_word ));
+        result.push_str(&format!(
+            "{} {:.2}{} {}\n\n",
+            original_info.flag, original.amount, original_info.symbol, original_word
+        ));
 
         for target_code in &self.target_currencies {
-            if target_code == &original.currency_code { continue; }
+            if target_code == &original.currency_code {
+                continue;
+            }
 
             if let Some(target_info) = self.find_currency_info(target_code) {
-                match Self::convert_amount( original.amount, &original.currency_code, target_code, &rates_data.rates, &rates_data.base_code ) {
+                match Self::convert_amount(
+                    original.amount,
+                    &original.currency_code,
+                    target_code,
+                    &rates_data.rates,
+                    &rates_data.base_code,
+                ) {
                     Ok(converted_amount) => {
                         let word = match self.language {
                             OutputLanguage::Russian => {
                                 let amount_int = converted_amount.trunc() as u64;
-                                get_plural_form(amount_int, &target_info.one, &target_info.few, &target_info.many)
-                            }
-                            // OutputLanguage::English => {
-                            //     get_plural_form_en(converted_amount, &target_info.one_en, &target_info.many_en)
-                            // }
+                                get_plural_form(
+                                    amount_int,
+                                    &target_info.one,
+                                    &target_info.few,
+                                    &target_info.many,
+                                )
+                            } // OutputLanguage::English => {
+                              //     get_plural_form_en(converted_amount, &target_info.one_en, &target_info.many_en)
+                              // }
                         };
-                        result.push_str(&format!( "{} {:.2}{} {}\n", target_info.flag, converted_amount, target_info.symbol, word ));
+                        result.push_str(&format!(
+                            "{} {:.2}{} {}\n",
+                            target_info.flag, converted_amount, target_info.symbol, word
+                        ));
                     }
                     Err(ConvertError::RateNotFound(missing_code)) => {
-                        eprintln!("Warning: Rate not found for '{}' in API response when converting from {}. Skipping.", missing_code, original.currency_code);
+                        eprintln!(
+                            "Warning: Rate not found for '{}' in API response when converting from {}. Skipping.",
+                            missing_code, original.currency_code
+                        );
                     }
                     Err(e) => {
-                        eprintln!("Warning: Conversion error from {} to {}: {}. Skipping.", original.currency_code, target_code, e);
+                        eprintln!(
+                            "Warning: Conversion error from {} to {}: {}. Skipping.",
+                            original.currency_code, target_code, e
+                        );
                     }
                 }
             } else {
-                eprintln!("Critical Warning: Currency info not found for target code '{}' defined in target_currencies.", target_code);
+                eprintln!(
+                    "Critical Warning: Currency info not found for target code '{}' defined in target_currencies.",
+                    target_code
+                );
             }
         }
 
-        if result.ends_with('\n') { result.pop(); }
+        if result.ends_with('\n') {
+            result.pop();
+        }
         Ok(result)
     }
 
     pub async fn process_text(&self, text: &str) -> Result<Vec<String>, ConvertError> {
         let detected_currencies = self.parse_text_for_currencies(text)?;
-        if detected_currencies.is_empty() { return Ok(Vec::new()); }
+        if detected_currencies.is_empty() {
+            return Ok(Vec::new());
+        }
         let rates_data = self.get_rates().await?;
         let mut results = Vec::new();
         for detected in detected_currencies {
@@ -259,19 +354,28 @@ impl CurrencyConverter {
         Ok(results)
     }
 
-    pub(crate) fn parse_text_for_currencies(&self, text: &str) -> Result<Vec<DetectedCurrency>, ConvertError> {
+    pub(crate) fn parse_text_for_currencies(
+        &self,
+        text: &str,
+    ) -> Result<Vec<DetectedCurrency>, ConvertError> {
         let mut detected: Vec<DetectedCurrency> = Vec::new();
         for cap in CURRENCY_REGEX.captures_iter(text) {
-            let (amount_str, identifier_str) = if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
-                (amount.as_str(), identifier.as_str().trim())
-            } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
-                (amount.as_str(), symbol.as_str())
-            } else { continue; };
+            let (amount_str, identifier_str) =
+                if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
+                    (amount.as_str(), identifier.as_str().trim())
+                } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
+                    (amount.as_str(), symbol.as_str())
+                } else {
+                    continue;
+                };
 
             let amount_str_cleaned = amount_str.replace(',', ".");
             if let Ok(amount) = amount_str_cleaned.parse::<f64>() {
                 if let Some(info) = self.find_currency_info_by_identifier(identifier_str) {
-                    detected.push(DetectedCurrency { amount, currency_code: info.code.clone() });
+                    detected.push(DetectedCurrency {
+                        amount,
+                        currency_code: info.code.clone(),
+                    });
                 }
             } else {
                 eprintln!("Warning: Failed to parse amount '{}'", amount_str);
