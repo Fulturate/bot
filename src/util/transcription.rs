@@ -114,7 +114,7 @@ pub struct Transcription {
 }
 
 impl Transcription {
-    pub async fn to_text(self) -> Vec<String> {
+    pub async fn to_text(&self) -> Vec<String> {
         let settings = gem_rs::types::Settings::new();
         let error_answer = "❌ Не удалось преобразовать текст из сообщения.".to_string();
 

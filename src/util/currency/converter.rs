@@ -95,11 +95,13 @@ pub struct CurrencyConverter {
 fn get_plural_form(number: u64, one: &str, few: &str, many: &str) -> String {
     let last_two_digits = number % 100;
     let last_digit = number % 10;
-    if last_two_digits >= 11 && last_two_digits <= 19 {
+    // if last_two_digits >= 11 && last_two_digits <= 19 {
+    if (11..=19).contains(&last_two_digits) {
         many.to_string()
     } else if last_digit == 1 {
         one.to_string()
-    } else if last_digit >= 2 && last_digit <= 4 {
+    } else if (2..=4).contains(&last_digit) {
+        // } else if last_digit >= 2 && last_digit <= 4 {
         few.to_string()
     } else {
         many.to_string()

@@ -7,6 +7,7 @@ use teloxide::prelude::*;
 #[derive(Clone)]
 pub struct Config {
     bot: Bot,
+    #[warn(dead_code)]
     owners: Vec<i64>,
     version: String,
     json_config: JsonConfig,
