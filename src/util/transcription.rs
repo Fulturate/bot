@@ -124,7 +124,7 @@ impl Transcription {
 
         let mut client = gem_rs::client::GemSession::Builder()
             .model(gem_rs::api::Models::Custom(ai_model))
-            .timeout(Duration::from_secs(120))
+            .timeout(Some(Duration::from_secs(120)))
             .build();
 
         let mut attempts = 0;
