@@ -4,6 +4,7 @@ use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
 use bytes::Bytes;
 use std::time::Duration;
+use gem_rs::types::HarmBlockThreshold;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
@@ -116,7 +117,9 @@ pub struct Transcription {
 
 impl Transcription {
     pub async fn to_text(&self) -> Vec<String> {
-        let settings = gem_rs::types::Settings::new();
+        let mut settings = gem_rs::types::Settings::new();
+        settings.set_all_safety_settings(HarmBlockThreshold::BlockNone);
+
         let error_answer = "❌ Не удалось преобразовать текст из сообщения.".to_string();
 
         let ai_model = self.config.get_json_config().get_ai_model().to_owned();
