@@ -7,11 +7,11 @@ pub async fn speech_recognition_handler(
     msg: Message,
     config: &Config,
 ) -> Result<(), MyError> {
-    // if msg.reply_to_message().is_some() {
-    //     transcription_handler(bot, msg.reply_to_message().unwrap().clone(), config).await?;
-    // }
-    msg.reply_to_message().is_some().then(async || {
-        transcription_handler(bot, msg.reply_to_message().unwrap().clone(), config).await
-    });
+    if msg.reply_to_message().is_some() {
+        transcription_handler(bot, msg.reply_to_message().unwrap().clone(), config).await?;
+    }
+    // msg.reply_to_message().is_some().then(async || {
+    //     transcription_handler(bot, msg.reply_to_message().unwrap().clone(), config).await
+    // });
     Ok(())
 }
