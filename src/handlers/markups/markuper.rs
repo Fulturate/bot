@@ -13,7 +13,7 @@ pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Resul
         let data = qq.data.clone().unwrap();
 
         if data.starts_with("delete_msg") {
-            delete_msg_handler(bot, qq, &config).await
+            delete_msg_handler(bot, qq).await
         } else {
             bot.answer_callback_query(qq.id).await.unwrap();
             Ok(())

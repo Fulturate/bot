@@ -18,6 +18,8 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .await
         .ok();
 
+    let original_user_id = msg.from().map(|u| u.id.0).unwrap_or(0);
+
     if let Some(message) = message {
         if let Some(file) = get_file_id(&msg).await {
             let file_data = save_file_to_memory(&bot, &file.file_id).await?;
@@ -35,7 +37,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
             .parse_mode(ParseMode::Html)
-            .reply_markup(delete_message_button())
+            .reply_markup(delete_message_button(original_user_id))
             .await?;
 
             for part in text_parts.iter().skip(1) {
@@ -45,7 +47,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 )
                 .reply_parameters(ReplyParameters::new(msg.id))
                 .parse_mode(ParseMode::Html)
-                .reply_markup(delete_message_button())
+                .reply_markup(delete_message_button(original_user_id))
                 .await?;
             }
         } else {

@@ -4,16 +4,31 @@ use teloxide::dispatching::dialogue::GetChatId;
 use teloxide::prelude::CallbackQuery;
 use teloxide::requests::Requester;
 use teloxide::Bot;
+use teloxide::payloads::AnswerCallbackQuerySetters;
 
 pub async fn delete_msg_handler(
     bot: Bot,
     q: CallbackQuery,
-    _: &Config,
 ) -> Result<(), MyError> {
-    if bot.delete_message(q.chat_id().unwrap(), q.message.unwrap().id()).await.is_ok() {
-        bot.answer_callback_query(q.id).await?;
-    } else {
-        bot.answer_callback_query(q.id).await?;
+    if let Some(data) = q.data {
+        let parts: Vec<&str> = data.split(':').collect();
+        if parts.len() == 2 && parts[0] == crate::util::inline::DELETE_CALLBACK_DATA {
+            if let Ok(original_user_id) = parts[1].parse::<u64>() {
+                if q.from.id.0.eq(&original_user_id) {
+                    if let Some(message) = q.message {
+                        bot.delete_message(message.chat().id, message.id()).await?;
+                    }
+                } else {
+                    bot.answer_callback_query(q.id)
+                        .text("❌ Вы не можете удалить чужое сообщение")
+                        .show_alert(true)
+                        .await?;
+                    return Ok(());
+                }
+            }
+        }
     }
+
+    bot.answer_callback_query(q.id).await?;
     Ok(())
 }
