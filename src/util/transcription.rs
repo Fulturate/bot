@@ -3,12 +3,12 @@ use crate::config::Config;
 use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
 use bytes::Bytes;
-use std::time::Duration;
 use gem_rs::types::HarmBlockThreshold;
+use std::time::Duration;
+use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
-use teloxide::Bot;
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot
@@ -127,9 +127,13 @@ impl Transcription {
         let ai_model = self.config.get_json_config().get_ai_model().to_owned();
         let prompt = self.config.get_json_config().get_ai_prompt().to_owned();
 
+        let mut context = gem_rs::types::Context::new();
+        context.push_message(gem_rs::types::Role::Model, prompt);
+
         let mut client = gem_rs::client::GemSession::Builder()
             .model(gem_rs::api::Models::Custom(ai_model))
             .timeout(Some(Duration::from_secs(120)))
+            .context(context)
             .build();
 
         let mut attempts = 0;
@@ -138,8 +142,7 @@ impl Transcription {
 
         while attempts < 3 {
             match client
-                .send_message_with_blob(
-                    &prompt,
+                .send_blob(
                     gem_rs::types::Blob::new(&self.mime_type, &self.data),
                     gem_rs::types::Role::User,
                     &settings,
