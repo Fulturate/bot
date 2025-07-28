@@ -24,7 +24,7 @@ pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Resul
     let cpu_usage_percent = system_info.global_cpu_usage();
 
     let response_message = format!(
-        "<b>[BETA]</b> Telegram Bot by @Weever\n\
+        "<b>[BETA]</b> Telegram Bot by @nixxoq (forked version, original author made by @weever)\n\
         <pre>\
         > <b>Version</b>: {}\n\
         > <b>API Ping</b>: {} ms\n\

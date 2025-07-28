@@ -18,7 +18,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .await
         .ok();
 
-    let original_user_id = msg.from().map(|u| u.id.0).unwrap_or(0);
+    let original_user_id = msg.from.clone().unwrap().id;
 
     if let Some(message) = message {
         if let Some(file) = get_file_id(&msg).await {
@@ -37,7 +37,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
             .parse_mode(ParseMode::Html)
-            .reply_markup(delete_message_button(original_user_id))
+            .reply_markup(delete_message_button(original_user_id.0))
             .await?;
 
             for part in text_parts.iter().skip(1) {
@@ -47,7 +47,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 )
                 .reply_parameters(ReplyParameters::new(msg.id))
                 .parse_mode(ParseMode::Html)
-                .reply_markup(delete_message_button(original_user_id))
+                .reply_markup(delete_message_button(original_user_id.0))
                 .await?;
             }
         } else {
@@ -75,7 +75,7 @@ pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
                     .unwrap()
                     .essence_str()
                     .to_owned(),
-                file_id: audio.audio.file.id.to_owned(),
+                file_id: audio.audio.file.id.0.to_string(),
             }),
             teloxide::types::MediaKind::Voice(voice) => Some(AudioStruct {
                 mime_type: voice
@@ -85,11 +85,11 @@ pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
                     .unwrap()
                     .essence_str()
                     .to_owned(),
-                file_id: voice.voice.file.id.to_owned(),
+                file_id: voice.voice.file.id.0.to_owned(),
             }),
             teloxide::types::MediaKind::VideoNote(video_note) => Some(AudioStruct {
                 mime_type: "video/mp4".to_owned(),
-                file_id: video_note.video_note.file.id.to_owned(),
+                file_id: video_note.video_note.file.id.0.to_owned(),
             }),
             _ => None,
         },
@@ -98,7 +98,10 @@ pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
 }
 
 pub async fn save_file_to_memory(bot: &Bot, file_id: &str) -> Result<Bytes, MyError> {
-    let file = bot.get_file(file_id).send().await?;
+    let file = bot
+        .get_file(teloxide::types::FileId(file_id.to_string()))
+        .send()
+        .await?;
     let file_url = format!(
         "https://api.telegram.org/file/bot{}/{}",
         bot.token(),

@@ -66,9 +66,9 @@ struct CurrencyConfig {
     one: String,
     few: String,
     many: String,
-    #[warn(dead_code)] // TODO: English Support
+    #[allow(dead_code)] // TODO: English Support
     one_en: String,
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     many_en: String,
     is_target: bool,
 }

@@ -1,10 +1,8 @@
-use crate::config::Config;
 use crate::util::errors::MyError;
-use teloxide::dispatching::dialogue::GetChatId;
+use teloxide::payloads::AnswerCallbackQuerySetters;
 use teloxide::prelude::CallbackQuery;
 use teloxide::requests::Requester;
 use teloxide::Bot;
-use teloxide::payloads::AnswerCallbackQuerySetters;
 
 pub async fn delete_msg_handler(
     bot: Bot,
