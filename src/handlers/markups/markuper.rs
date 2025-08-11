@@ -6,7 +6,7 @@ use teloxide::requests::Requester;
 use teloxide::types::CallbackQuery;
 
 pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
-    let config = Config::new().await;
+    let _config = Config::new().await;
 
     tokio::spawn(async move {
         let qq = q.clone();
