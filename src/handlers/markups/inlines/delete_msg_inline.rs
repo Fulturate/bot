@@ -48,20 +48,20 @@ pub async fn delete_msg_handler(bot: Bot, q: CallbackQuery) -> Result<(), MyErro
 
     let member = bot.get_chat_member(chat_id, q.from.id).await;
 
-    if let Ok(member) = member {
-        if member.user.id.0 == original_user_id || member.is_privileged() {
-            return match bot.delete_message(chat_id, message_id).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    eprintln!("Failed to delete message: {:?}", e);
-                    bot.answer_callback_query(q.id)
+    if let Ok(member) = member
+        && (member.user.id.0 == original_user_id || member.is_privileged())
+    {
+        return match bot.delete_message(chat_id, message_id).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                eprintln!("Failed to delete message: {:?}", e);
+                bot.answer_callback_query(q.id)
                         .text("❌ Не удалось удалить сообщение (возможно, у меня нет прав или сообщение слишком старое).")
                         .show_alert(true)
                         .await?;
-                    Ok(())
-                }
-            };
-        }
+                Ok(())
+            }
+        };
     }
 
     bot.answer_callback_query(q.id)
