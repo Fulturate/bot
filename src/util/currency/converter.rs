@@ -74,9 +74,13 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let patterns_part = escaped_patterns.join("|");
     let symbols_part = escaped_symbols.join("|");
 
+    let number_pattern_suffix = r"([\d.,_ кkмmбbтt]+)";
+
     let regex_string = format!(
-        r"(?i)\b(\d+(?:[.,]\d+)?)\s*\b({})\b|({})\s*\b(\d+(?:[.,]\d+)?)",
-        patterns_part, symbols_part
+        // r"(?i)\b{}\s*\b({})\b|({})\s*\b{}",
+        // r"(?i){}\s*({})\b|({})\s*{}",
+        r"(?i)\b{}\s*({})\b|({})\s*{}",
+        number_pattern_suffix, patterns_part, symbols_part, number_pattern_suffix
     );
 
     Ok(regex_string)
@@ -89,6 +93,13 @@ static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&regex_string)
         .unwrap_or_else(|e| panic!("FATAL: Invalid regex generated from config: {}", e))
 });
+
+// for combined values like 2k2k2k2k ton
+static COMPONENT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(\d+(?:[.,]\d+)?)\s*(кк|kk|k|к|m|м|b|б|t|т|тыс|млн|млрд|трлн)").unwrap()
+});
+static INFIX_K_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(\d+(?:[.,]\d+)?)[kк](\d{1,3})$").unwrap());
 
 #[derive(Deserialize, Debug, Clone)]
 struct CurrencyConfig {
@@ -194,18 +205,18 @@ impl CurrencyConverter {
                 target_codes.push(currency.code.clone());
             }
 
-            if currency.source == "tonapi" {
-                if let Some(identifier) = &currency.api_identifier {
-                    if identifier.len() > 10
-                        && (identifier.starts_with("EQ") || identifier.starts_with("UQ"))
-                    {
-                        ton_addresses.push(identifier.clone());
-                        ton_address_to_code.insert(identifier.clone(), currency.code.clone());
-                    } else {
-                        let lower_ticker = identifier.to_lowercase();
-                        ton_tickers.push(lower_ticker.clone());
-                        ton_ticker_to_code.insert(lower_ticker, currency.code.clone());
-                    }
+            if currency.source == "tonapi"
+                && let Some(identifier) = &currency.api_identifier
+            {
+                if identifier.len() > 10
+                    && (identifier.starts_with("EQ") || identifier.starts_with("UQ"))
+                {
+                    ton_addresses.push(identifier.clone());
+                    ton_address_to_code.insert(identifier.clone(), currency.code.clone());
+                } else {
+                    let lower_ticker = identifier.to_lowercase();
+                    ton_tickers.push(lower_ticker.clone());
+                    ton_ticker_to_code.insert(lower_ticker, currency.code.clone());
                 }
             }
             currency_map.insert(currency.code.clone(), currency);
@@ -241,29 +252,33 @@ impl CurrencyConverter {
         let parsed = response.json::<TonApiResponse>().await?;
 
         let mut crypto_rates = HashMap::new();
-        for (api_identifier, rate_entry) in parsed.rates {
-            let mut code: Option<String> = None;
 
-            if let Some(found_code) = self.ton_address_to_code.get(&api_identifier) {
-                code = Some(found_code.clone());
-            } else if let Some(found_code) =
-                self.ton_ticker_to_code.get(&api_identifier.to_lowercase())
-            {
-                code = Some(found_code.clone());
-            }
+        parsed
+            .rates
+            .iter()
+            .for_each(|(api_identifier, rate_entry)| {
+                let mut code: Option<String> = None;
 
-            if let Some(found_code) = code {
-                if let Some(price_in_uah) = rate_entry.prices.get("UAH") {
-                    crypto_rates.insert(found_code, *price_in_uah);
+                if let Some(found_code) = self.ton_address_to_code.get(api_identifier) {
+                    code = Some(found_code.clone());
+                } else if let Some(found_code) =
+                    self.ton_ticker_to_code.get(&api_identifier.to_lowercase())
+                {
+                    code = Some(found_code.clone());
                 }
-            } else {
-                // ???
-                eprintln!(
-                    "[DEBUG] Skipped unknown API identifier from TonAPI: {}",
-                    api_identifier
-                );
-            }
-        }
+
+                if let Some(found_code) = code {
+                    if let Some(price_in_uah) = rate_entry.prices.get("UAH") {
+                        crypto_rates.insert(found_code, *price_in_uah);
+                    }
+                } else {
+                    // ???
+                    eprintln!(
+                        "[DEBUG] Skipped unknown API identifier from TonAPI: {}",
+                        api_identifier
+                    );
+                }
+            });
         Ok(crypto_rates)
     }
 
@@ -314,10 +329,10 @@ impl CurrencyConverter {
 
     async fn get_rates(&self) -> Result<CachedRates, ConvertError> {
         let mut cache_guard = self.cache.lock().await;
-        if let Some(cached_data) = &*cache_guard {
-            if cached_data.fetched_at.elapsed() < Duration::from_secs(CACHE_DURATION_SECS) {
-                return Ok(cached_data.clone());
-            }
+        if let Some(cached_data) = &*cache_guard
+            && cached_data.fetched_at.elapsed() < Duration::from_secs(CACHE_DURATION_SECS)
+        {
+            return Ok(cached_data.clone());
         }
 
         let new_rates = self.fetch_rates().await?;
@@ -341,17 +356,84 @@ impl CurrencyConverter {
                     continue;
                 };
 
-            let amount_str_cleaned = amount_str.replace(',', ".");
-            if let Ok(amount) = amount_str_cleaned.parse::<f64>() {
-                if let Some(info) = self.find_currency_info_by_identifier(identifier_str) {
-                    detected.push(DetectedCurrency {
-                        amount,
-                        currency_code: info.code.clone(),
-                    });
-                }
+            if let Some(amount) = Self::parse_amount_with_suffix(amount_str)
+                && let Some(info) = self.find_currency_info_by_identifier(identifier_str)
+            {
+                detected.push(DetectedCurrency {
+                    amount,
+                    currency_code: info.code.clone(),
+                });
             }
         }
         Ok(detected)
+    }
+
+    pub fn parse_amount_with_suffix(amount_str: &str) -> Option<f64> {
+        let get_multiplier = |suffix: &str| -> Option<f64> {
+            match suffix {
+                "к" | "k" | "тыс" => Some(1_000.0),
+                "м" | "m" | "млн" | "кк" | "kk" => Some(1_000_000.0),
+                "б" | "b" | "млрд" => Some(1_000_000_000.0),
+                "т" | "t" | "трлн" => Some(1_000_000_000_000.0),
+                _ => None,
+            }
+        };
+
+        let s = amount_str.to_lowercase().replace(['_', ' '], "");
+        if s.is_empty() {
+            return None;
+        }
+
+        // single pattern check ($1k200)
+        if let Some(caps) = INFIX_K_RE.captures(&s) {
+            let before_k_str = caps.get(1).unwrap().as_str();
+            let after_k_str = caps.get(2).unwrap().as_str();
+
+            return Self::parse_amount_with_suffix(before_k_str).and_then(|before_val| {
+                after_k_str
+                    .parse::<f64>()
+                    .ok()
+                    .map(|after_val| before_val * 1000.0 + after_val)
+            });
+        }
+
+        // multiple pattern check ($1m2k300)
+        COMPONENT_RE
+            .captures_iter(&s)
+            .try_fold((0.0, 0), |(current_total, last_end), cap| {
+                let full_match = cap.get(0).unwrap();
+                if full_match.start() != last_end {
+                    return Err("Invalid character between components");
+                }
+
+                let num_str = cap.get(1).unwrap().as_str();
+                let suffix_str = cap.get(2).unwrap().as_str();
+
+                num_str
+                    .replace(',', ".")
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(|num| get_multiplier(suffix_str).map(|mult| num * mult))
+                    .map(|value| (current_total + value, full_match.end()))
+                    .ok_or("Failed to parse component")
+            })
+            .ok()
+            .and_then(|(current_total, full_match_end)| {
+                let tail = &s[full_match_end..];
+                if tail.is_empty() {
+                    Some(current_total)
+                } else {
+                    if full_match_end > 0 && tail.chars().any(|c| c.is_alphabetic()) {
+                        return None;
+                    }
+
+                    tail.replace(',', ".")
+                        .parse::<f64>()
+                        .ok()
+                        .map(|tail_val| current_total + tail_val)
+                }
+            })
+            .or_else(|| s.replace(",", ".").parse::<f64>().ok())
     }
 
     fn find_currency_info(&self, code: &str) -> Option<&CurrencyConfig> {
