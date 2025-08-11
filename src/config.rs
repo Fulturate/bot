@@ -1,5 +1,5 @@
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{read_json_config, JsonConfig};
+use crate::util::json::{JsonConfig, read_json_config};
 use dotenv::dotenv;
 use std::sync::Arc;
 use teloxide::prelude::*;

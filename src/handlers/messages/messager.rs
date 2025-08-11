@@ -4,9 +4,8 @@ use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
 use teloxide::Bot;
 use teloxide::payloads::SendMessageSetters;
-use teloxide::prelude::Message;
 use teloxide::requests::Requester;
-use teloxide::types::{ParseMode, ReplyParameters};
+use teloxide::types::{Message, ParseMode, ReplyParameters};
 use tokio::task;
 
 pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), MyError> {
