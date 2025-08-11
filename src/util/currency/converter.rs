@@ -347,16 +347,35 @@ impl CurrencyConverter {
     ) -> Result<Vec<DetectedCurrency>, ConvertError> {
         let mut detected: Vec<DetectedCurrency> = Vec::new();
         for cap in CURRENCY_REGEX.captures_iter(text) {
+            let full_match = cap.get(0).unwrap();
             let (amount_str, identifier_str) =
                 if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
-                    (amount.as_str(), identifier.as_str().trim())
+                    (amount, identifier.as_str().trim())
                 } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
-                    (amount.as_str(), symbol.as_str())
+                    (amount, symbol.as_str())
                 } else {
                     continue;
                 };
 
-            if let Some(amount) = Self::parse_amount_with_suffix(amount_str)
+            let start_index = amount_str.start();
+            if start_index > 0 {
+                if let Some(char_before) = text[..start_index].chars().last() {
+                    if char_before.is_alphanumeric() {
+                        continue;
+                    }
+                }
+            }
+
+            let end_index = full_match.end();
+            if end_index < text.len() {
+                if let Some(char_after) = text[end_index..].chars().next() {
+                    if char_after.is_alphanumeric() {
+                        continue;
+                    }
+                }
+            }
+
+            if let Some(amount) = Self::parse_amount_with_suffix(amount_str.as_str())
                 && let Some(info) = self.find_currency_info_by_identifier(identifier_str)
             {
                 detected.push(DetectedCurrency {
