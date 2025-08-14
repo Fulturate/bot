@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::structs::WORD_VALUES;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
@@ -22,6 +23,12 @@ pub enum OutputLanguage {
     Russian,
     #[allow(dead_code)]
     English, // when
+}
+
+#[derive(Default)]
+struct ParseState {
+    total: f64,
+    current_chunk: f64,
 }
 
 #[derive(Error, Debug)]
@@ -74,12 +81,15 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let patterns_part = escaped_patterns.join("|");
     let symbols_part = escaped_symbols.join("|");
 
-    let number_pattern_suffix = r"([\d.,_ кkмmбbтt]+)";
+    let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
+
+    let number_pattern_suffix = format!(
+        r"[\d.,_ кkмmбbтt]+|(?:(?:{})\b\s*)+",
+        number_words.join("|")
+    );
 
     let regex_string = format!(
-        // r"(?i)\b{}\s*\b({})\b|({})\s*\b{}",
-        // r"(?i){}\s*({})\b|({})\s*{}",
-        r"(?i)\b{}\s*({})\b|({})\s*{}",
+        r"(?i)(?:^|\s)(?:({})\s*({})\b|({})\s*({})\b)",
         number_pattern_suffix, patterns_part, symbols_part, number_pattern_suffix
     );
 
@@ -341,43 +351,69 @@ impl CurrencyConverter {
         Ok(new_rates)
     }
 
+    pub fn parse_number_words(text: &str) -> Option<f64> {
+        let state = text
+            .split_whitespace()
+            .filter_map(|word| WORD_VALUES.get(word.to_lowercase().as_str()))
+            .fold(ParseState::default(), |mut state, info| {
+                if info.is_multiplier {
+                    let chunk_to_add = if state.current_chunk == 0.0 {
+                        1.0
+                    } else {
+                        state.current_chunk
+                    };
+                    state.total += chunk_to_add * info.value;
+                    state.current_chunk = 0.0;
+                } else if info.value == 100.0 && state.current_chunk > 0.0 {
+                    state.current_chunk *= info.value;
+                } else {
+                    state.current_chunk += info.value;
+                }
+                state
+            });
+
+        let result = state.total + state.current_chunk;
+
+        if result > 0.0 {
+            Some(result)
+        } else {
+            if text
+                .split_whitespace()
+                .any(|w| w == "ноль" || w == "нуль" || w == "zero")
+            {
+                Some(0.0)
+            } else {
+                None
+            }
+        }
+    }
+
     pub fn parse_text_for_currencies(
         &self,
         text: &str,
     ) -> Result<Vec<DetectedCurrency>, ConvertError> {
         let mut detected: Vec<DetectedCurrency> = Vec::new();
         for cap in CURRENCY_REGEX.captures_iter(text) {
-            let full_match = cap.get(0).unwrap();
             let (amount_str, identifier_str) =
                 if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
-                    (amount, identifier.as_str().trim())
+                    (amount.as_str().trim(), identifier.as_str().trim())
                 } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
-                    (amount, symbol.as_str())
+                    (amount.as_str().trim(), symbol.as_str())
                 } else {
                     continue;
                 };
 
-            let start_index = amount_str.start();
-            if start_index > 0 {
-                if let Some(char_before) = text[..start_index].chars().last() {
-                    if char_before.is_alphanumeric() {
-                        continue;
-                    }
-                }
-            }
+            let first_char = amount_str.chars().next();
+            let amount_result = if first_char.map_or(false, |c| c.is_alphabetic()) {
+                Self::parse_number_words(amount_str)
+            } else {
+                Self::parse_amount_with_suffix(amount_str)
+            };
 
-            let end_index = full_match.end();
-            if end_index < text.len() {
-                if let Some(char_after) = text[end_index..].chars().next() {
-                    if char_after.is_alphanumeric() {
-                        continue;
-                    }
-                }
-            }
-
-            if let Some(amount) = Self::parse_amount_with_suffix(amount_str.as_str())
-                && let Some(info) = self.find_currency_info_by_identifier(identifier_str)
-            {
+            if let (Some(amount), Some(info)) = (
+                amount_result,
+                self.find_currency_info_by_identifier(identifier_str),
+            ) {
                 detected.push(DetectedCurrency {
                     amount,
                     currency_code: info.code.clone(),

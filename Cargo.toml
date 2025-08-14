@@ -1,6 +1,6 @@
 [package]
 name = "fulturate"
-version = "0.0.9-rs-pre"
+version = "0.0.10-rs-pre"
 edition = "2024"
 
 [dependencies]
