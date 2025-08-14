@@ -84,8 +84,9 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
     let number_pattern_suffix = format!(
-        r"[\d.,_ кkмmбbтt]+|(?:(?:{})\b\s*)+",
-        number_words.join("|")
+        r"(?:{}|(?:(?:{})\b\s*)+)",    // main number regex
+        r"[\d.,_]+(?:\s*[кkмmбbтt])?", // number digits and short symbols
+        number_words.join("|")         // number words
     );
 
     let regex_string = format!(
