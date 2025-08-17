@@ -91,10 +91,10 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
     let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
-    let repeatable_digits_part = format!(r"(?:[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?+\b");
+    let repeatable_digits_part = format!(r"(?:[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?)+");
 
     let number_pattern_any = format!(
-        r"(?:{}|(?:(?:{})\b[ \t]*)+)",
+        r"(?:{}\b|(?:(?:{})\b[ \t]*)+)",
         repeatable_digits_part,
         number_words.join("|")
     );
