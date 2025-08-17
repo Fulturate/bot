@@ -91,10 +91,10 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
     let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
-    let repeatable_digits_part = format!(r"(?:[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?+\b");
+    let repeatable_digits_part = format!(r"(?:[\d.,_\s]+(?:[ \t]*(?:{number_suffixes}))?)+");
 
     let number_pattern_any = format!(
-        r"(?:{}|(?:(?:{})\b[ \t]*)+)",
+        r"(?:{}\b|(?:(?:{})\b[ \t]*)+)",
         repeatable_digits_part,
         number_words.join("|")
     );
@@ -465,36 +465,31 @@ impl CurrencyConverter {
     }
 
     pub fn parse_amount_with_suffix(amount_str: &str) -> Option<f64> {
-        let s = amount_str.trim().to_lowercase().replace(['_', ' '], "");
+        let s = amount_str
+            .trim()
+            .to_lowercase()
+            .replace(['_', ' '], "")
+            .replace(',', ".");
+
         if s.is_empty() {
             return None;
         }
 
-        let number_part_str = {
-            let has_comma = s.contains(',');
-            let has_dot = s.contains('.');
+        let number_part_str = if let Some(last_dot_pos) = s.rfind('.') {
+            let after_last_dot = &s[last_dot_pos + 1..];
+            let is_thousand_separator = !after_last_dot.chars().any(|c| !c.is_digit(10))
+                && after_last_dot.len() == 3
+                && s.chars().filter(|&c| c == '.').count() > 0;
 
-            if has_comma {
-                s.replace('.', "").replace(',', ".")
-            } else if has_dot {
-                if let Some(last_dot_pos) = s.rfind('.') {
-                    let after_last_dot = &s[last_dot_pos + 1..];
-
-                    let last_part_is_suffix = after_last_dot.chars().any(|c| !c.is_digit(10));
-
-                    if !last_part_is_suffix && after_last_dot.len() == 3 {
-                        s.replace('.', "")
-                    } else {
-                        let before_last_dot = &s[..last_dot_pos];
-                        let remaining_part = &s[last_dot_pos..];
-                        before_last_dot.replace('.', "") + remaining_part
-                    }
-                } else {
-                    s
-                }
+            if is_thousand_separator && s.split('.').all(|part| part.len() <= 3 || part.is_empty())
+            {
+                s.replace('.', "")
             } else {
-                s
+                let (before_last_dot, remaining_part) = s.split_at(last_dot_pos);
+                before_last_dot.replace('.', "") + remaining_part
             }
+        } else {
+            s
         };
 
         let get_multiplier = |suffix: &str| -> Option<f64> {
