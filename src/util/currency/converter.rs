@@ -91,11 +91,11 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
     let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
-    let number_digits_part = format!(r"[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?\b");
+    let repeatable_digits_part = format!(r"(?:[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?+\b");
 
     let number_pattern_any = format!(
         r"(?:{}|(?:(?:{})\b[ \t]*)+)",
-        number_digits_part,
+        repeatable_digits_part,
         number_words.join("|")
     );
 
@@ -465,6 +465,38 @@ impl CurrencyConverter {
     }
 
     pub fn parse_amount_with_suffix(amount_str: &str) -> Option<f64> {
+        let s = amount_str.trim().to_lowercase().replace(['_', ' '], "");
+        if s.is_empty() {
+            return None;
+        }
+
+        let number_part_str = {
+            let has_comma = s.contains(',');
+            let has_dot = s.contains('.');
+
+            if has_comma {
+                s.replace('.', "").replace(',', ".")
+            } else if has_dot {
+                if let Some(last_dot_pos) = s.rfind('.') {
+                    let after_last_dot = &s[last_dot_pos + 1..];
+
+                    let last_part_is_suffix = after_last_dot.chars().any(|c| !c.is_digit(10));
+
+                    if !last_part_is_suffix && after_last_dot.len() == 3 {
+                        s.replace('.', "")
+                    } else {
+                        let before_last_dot = &s[..last_dot_pos];
+                        let remaining_part = &s[last_dot_pos..];
+                        before_last_dot.replace('.', "") + remaining_part
+                    }
+                } else {
+                    s
+                }
+            } else {
+                s
+            }
+        };
+
         let get_multiplier = |suffix: &str| -> Option<f64> {
             match suffix {
                 "к" | "k" | "тыс" => Some(1_000.0),
@@ -475,13 +507,8 @@ impl CurrencyConverter {
             }
         };
 
-        let s = amount_str.to_lowercase().replace(['_', ' '], "");
-        if s.is_empty() {
-            return None;
-        }
-
         // single pattern check ($1k200)
-        if let Some(caps) = INFIX_K_RE.captures(&s) {
+        if let Some(caps) = INFIX_K_RE.captures(&number_part_str) {
             let before_k_str = caps.get(1).unwrap().as_str();
             let after_k_str = caps.get(2).unwrap().as_str();
 
@@ -495,18 +522,15 @@ impl CurrencyConverter {
 
         // multiple pattern check ($1m2k300)
         COMPONENT_RE
-            .captures_iter(&s)
+            .captures_iter(&number_part_str)
             .try_fold((0.0, 0), |(current_total, last_end), cap| {
                 let full_match = cap.get(0).unwrap();
                 if full_match.start() != last_end {
                     return Err("Invalid character between components");
                 }
-
                 let num_str = cap.get(1).unwrap().as_str();
                 let suffix_str = cap.get(2).unwrap().as_str();
-
                 num_str
-                    .replace(',', ".")
                     .parse::<f64>()
                     .ok()
                     .and_then(|num| get_multiplier(suffix_str).map(|mult| num * mult))
@@ -515,21 +539,19 @@ impl CurrencyConverter {
             })
             .ok()
             .and_then(|(current_total, full_match_end)| {
-                let tail = &s[full_match_end..];
+                let tail = &number_part_str[full_match_end..];
                 if tail.is_empty() {
                     Some(current_total)
                 } else {
                     if full_match_end > 0 && tail.chars().any(|c| c.is_alphabetic()) {
                         return None;
                     }
-
-                    tail.replace(',', ".")
-                        .parse::<f64>()
+                    tail.parse::<f64>()
                         .ok()
                         .map(|tail_val| current_total + tail_val)
                 }
             })
-            .or_else(|| s.replace(",", ".").parse::<f64>().ok())
+            .or_else(|| number_part_str.parse::<f64>().ok())
     }
 
     fn find_currency_info(&self, code: &str) -> Option<&CurrencyConfig> {
