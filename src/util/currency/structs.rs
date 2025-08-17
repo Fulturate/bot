@@ -727,6 +727,20 @@ pub static WORD_VALUES: Lazy<HashMap<&'static str, WordInfo>> = Lazy::new(|| {
             },
         ),
         (
+            "тыс",
+            WordInfo {
+                value: 1_000.0,
+                is_multiplier: true,
+            },
+        ),
+        (
+            "тыщ",
+            WordInfo {
+                value: 1_000.0,
+                is_multiplier: true,
+            },
+        ),
+        (
             "тисяча",
             WordInfo {
                 value: 1_000.0,

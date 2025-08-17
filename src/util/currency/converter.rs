@@ -81,17 +81,34 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let patterns_part = escaped_patterns.join("|");
     let symbols_part = escaped_symbols.join("|");
 
+    let multiplier_words_part: String = WORD_VALUES
+        .iter()
+        .filter(|(_, info)| info.is_multiplier)
+        .map(|(word, _)| regex::escape(word))
+        .collect::<Vec<String>>()
+        .join("|");
+
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
-    let number_pattern_suffix = format!(
-        r"(?:{}|(?:(?:{})\b\s*)+)",    // main number regex
-        r"[\d.,_]+(?:\s*[кkмmбbтt])?", // number digits and short symbols
-        number_words.join("|")         // number words
+    let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
+    let number_digits_part = format!(r"[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?\b");
+
+    let number_pattern_any = format!(
+        r"(?:{}|(?:(?:{})\b[ \t]*)+)",
+        number_digits_part,
+        number_words.join("|")
     );
 
     let regex_string = format!(
-        r"(?i)(?:^|\s)(?:({})\s*({})\b|({})\s*({})\b)",
-        number_pattern_suffix, patterns_part, symbols_part, number_pattern_suffix
+        r"(?i)(?:^|\s)(?:{}|{}|{})",
+        format!(
+            r"(?:({multiplier})[ \t]+)?({number})[ \t]*({word_patterns})\b",
+            multiplier = multiplier_words_part,
+            number = number_pattern_any,
+            word_patterns = patterns_part
+        ),
+        format!(r"({symbols_part})[ \t]*({number_pattern_any})\b"),
+        format!(r"({number_pattern_any})[ \t]*({symbols_part})")
     );
 
     Ok(regex_string)
@@ -393,35 +410,59 @@ impl CurrencyConverter {
         &self,
         text: &str,
     ) -> Result<Vec<DetectedCurrency>, ConvertError> {
-        let mut detected: Vec<DetectedCurrency> = Vec::new();
-        for cap in CURRENCY_REGEX.captures_iter(text) {
-            let (amount_str, identifier_str) =
-                if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
-                    (amount.as_str().trim(), identifier.as_str().trim())
-                } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
-                    (amount.as_str().trim(), symbol.as_str())
-                } else {
-                    continue;
-                };
-
+        let parse_amount_or_words = |amount_str: &str| -> Option<f64> {
             let first_char = amount_str.chars().next();
-            let amount_result = if first_char.map_or(false, |c| c.is_alphabetic()) {
+            if first_char.map_or(false, |c| {
+                c.is_alphabetic() && c.to_lowercase().next() != Some('a')
+            }) {
                 Self::parse_number_words(amount_str)
             } else {
                 Self::parse_amount_with_suffix(amount_str)
-            };
+            }
+        };
 
-            if let (Some(amount), Some(info)) = (
-                amount_result,
-                self.find_currency_info_by_identifier(identifier_str),
-            ) {
-                detected.push(DetectedCurrency {
+        let currencies = CURRENCY_REGEX
+            .captures_iter(text)
+            .filter_map(|cap| {
+                println!("{:#?}", cap);
+                let (amount, identifier_str) =
+                    // {num}{symbol} with hidden {multiplier}
+                    if let (Some(num_str), Some(identifier)) = (cap.get(2), cap.get(3)) {
+                        let base_amount = parse_amount_or_words(num_str.as_str().trim())?;
+
+                        // check multiplier
+                        let final_amount = if let Some(multiplier_match) = cap.get(1) {
+                            let multiplier_value = WORD_VALUES.get(multiplier_match.as_str().to_lowercase().as_str())?.value;
+                            base_amount * multiplier_value
+                        } else {
+                            base_amount
+                        };
+
+                        Some((final_amount, identifier.as_str().trim()))
+                    }
+                    // {symbol}{num}
+                    else if let (Some(identifier), Some(amount_str)) = (cap.get(4), cap.get(5)) {
+                        let amount = parse_amount_or_words(amount_str.as_str().trim())?;
+                        Some((amount, identifier.as_str()))
+                    }
+                    // {num}{symbol}
+                    else if let (Some(amount_str), Some(identifier)) = (cap.get(6), cap.get(7)) {
+                        let amount = parse_amount_or_words(amount_str.as_str().trim())?;
+                        Some((amount, identifier.as_str()))
+                    } else {
+                        None
+                    }?;
+
+                let info = self.find_currency_info_by_identifier(identifier_str)?;
+
+                Some(DetectedCurrency {
                     amount,
                     currency_code: info.code.clone(),
-                });
-            }
-        }
-        Ok(detected)
+                })
+            })
+            .collect();
+
+        Ok(currencies)
     }
 
     pub fn parse_amount_with_suffix(amount_str: &str) -> Option<f64> {
