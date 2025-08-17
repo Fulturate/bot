@@ -5,6 +5,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+use super::structs::WORD_VALUES;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
@@ -12,14 +13,22 @@ use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-const API_URL: &str = "https://open.er-api.com/v6/latest/UAH";
-const CACHE_DURATION_SECS: u64 = 24 * 60 * 60;
+const CACHE_DURATION_SECS: u64 = 60 * 10;
 const CURRENCY_CONFIG_PATH: &str = "currencies.json";
+const COINBASE_API_URL: &str = "https://api.coinbase.com/v2/exchange-rates?currency=UAH";
+const TONAPI_URL: &str = "https://tonapi.io/v2/rates";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputLanguage {
     Russian,
-    // English,
+    #[allow(dead_code)]
+    English, // when
+}
+
+#[derive(Default)]
+struct ParseState {
+    total: f64,
+    current_chunk: f64,
 }
 
 #[derive(Error, Debug)]
@@ -29,46 +38,112 @@ pub enum ConvertError {
     #[error("Failed to parse JSON response: {0}")]
     ParseError(#[from] serde_json::Error),
     #[error("API returned an error: {0}")]
+    #[allow(dead_code)]
     ApiError(String),
-    #[error("Cache lock poisoned")]
+    #[error("Currency '{0}' not found in the configuration")]
     CurrencyNotFound(String),
-    #[error("Invalid currency format detected during parsing")]
+    #[error("Rate for '{0}' not found in the combined API responses")]
     RateNotFound(String),
     #[error("Internal error: {0}")]
+    #[allow(dead_code)]
     InternalError(String),
     #[error("Failed to read currency config file '{0}': {1}")]
     ConfigFileReadError(String, std::io::Error),
     #[error("Failed to parse currency config file '{0}': {1}")]
     ConfigFileParseError(String, serde_json::Error),
+    #[error("No rates could be fetched from any API")]
+    NoRatesFetched,
+    #[error("Failed to build regex from config: {0}")]
+    #[allow(dead_code)]
+    RegexBuildError(String),
 }
 
-#[derive(Deserialize, Debug, Clone)]
-struct ApiResponse {
-    result: String,
-    base_code: String,
-    rates: HashMap<String, f64>,
+fn build_regex_from_config() -> Result<String, ConvertError> {
+    let config_content = fs::read_to_string(CURRENCY_CONFIG_PATH)
+        .map_err(|e| ConvertError::ConfigFileReadError(CURRENCY_CONFIG_PATH.to_string(), e))?;
+
+    let currencies: Vec<CurrencyConfig> = serde_json::from_str(&config_content)
+        .map_err(|e| ConvertError::ConfigFileParseError(CURRENCY_CONFIG_PATH.to_string(), e))?;
+
+    let mut all_patterns = Vec::new();
+    let mut all_symbols = Vec::new();
+
+    for currency in currencies {
+        all_patterns.extend(currency.patterns.iter().cloned());
+        if !currency.symbol.is_empty() {
+            all_symbols.push(currency.symbol.clone());
+        }
+    }
+
+    let escaped_patterns: Vec<String> = all_patterns.iter().map(|p| regex::escape(p)).collect();
+    let escaped_symbols: Vec<String> = all_symbols.iter().map(|s| regex::escape(s)).collect();
+
+    let patterns_part = escaped_patterns.join("|");
+    let symbols_part = escaped_symbols.join("|");
+
+    let multiplier_words_part: String = WORD_VALUES
+        .iter()
+        .filter(|(_, info)| info.is_multiplier)
+        .map(|(word, _)| regex::escape(word))
+        .collect::<Vec<String>>()
+        .join("|");
+
+    let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
+
+    let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
+    let repeatable_digits_part = format!(r"(?:[\d.,_]+(?:[ \t]*(?:{number_suffixes}))?+\b");
+
+    let number_pattern_any = format!(
+        r"(?:{}|(?:(?:{})\b[ \t]*)+)",
+        repeatable_digits_part,
+        number_words.join("|")
+    );
+
+    let regex_string = format!(
+        r"(?i)(?:^|\s)(?:{}|{}|{})",
+        format!(
+            r"(?:({multiplier})[ \t]+)?({number})[ \t]*({word_patterns})\b",
+            multiplier = multiplier_words_part,
+            number = number_pattern_any,
+            word_patterns = patterns_part
+        ),
+        format!(r"({symbols_part})[ \t]*({number_pattern_any})\b"),
+        format!(r"({number_pattern_any})[ \t]*({symbols_part})")
+    );
+
+    Ok(regex_string)
 }
 
-#[derive(Debug, Clone)]
-struct CachedRates {
-    fetched_at: Instant,
-    data: ApiResponse,
-}
+static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let regex_string = build_regex_from_config()
+        .map_err(|e| e.to_string())
+        .expect("FATAL: Could not build regex from currency config file.");
+    Regex::new(&regex_string)
+        .unwrap_or_else(|e| panic!("FATAL: Invalid regex generated from config: {}", e))
+});
 
-type Cache = Arc<Mutex<Option<CachedRates>>>;
+// for combined values like 2k2k2k2k ton
+static COMPONENT_RE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(\d+(?:[.,]\d+)?)\s*(кк|kk|k|к|m|м|b|б|t|т|тыс|млн|млрд|трлн)").unwrap()
+});
+static INFIX_K_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^(\d+(?:[.,]\d+)?)[kк](\d{1,3})$").unwrap());
 
 #[derive(Deserialize, Debug, Clone)]
 struct CurrencyConfig {
     code: String,
+    source: String,
+    #[serde(default)]
+    api_identifier: Option<String>,
     symbol: String,
     flag: String,
     patterns: Vec<String>,
     one: String,
     few: String,
     many: String,
-    #[warn(dead_code)] // TODO: English Support
+    #[allow(dead_code)]
     one_en: String,
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     many_en: String,
     is_target: bool,
 }
@@ -79,29 +154,57 @@ pub struct DetectedCurrency {
     currency_code: String,
 }
 
-static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(\d+(?:[.,]\d+)?)\s*\b(USD|EUR|RUB|UAH|GBP|BYN|KZT|JPY|CNY|CHF|CAD|AUD|SEK|NOK|TRY|INR|BRL|BDT|AED|PLN|CZK|ILS|ZAR|руб(?:лей|ля|ль|л)?|р\.|коп(?:еек|ейки|ейка)?|гривен|гривні|грн\.?|hryvnia[s]?|доллар(?:а|ов)?|баксов|dollar[s]?|евро|євро|euro[s]?|фунт(?:а|ов)?|pound[s]?|стерлингов|иен[аы]?|yen|юан(?:[ьяей]*)?|yuan|тенге|tenge|лир[аы]?|lira|франк(?:а|ов)?|frank[s]?|кро[нн](?:[аы]|он)?|krona[s]?|шекел(?:ей|я)?|shekel[s]?|злотых|zloty|динар(?:а|ов)?|dinar|форинт(?:а|ов)?|forint|бата|baht|вон(?:а|ы)?|won|песо|peso|реал(?:а|ов)?|real|така|taka[s]?)\b|([€$₽₴£¥֏₺₪₹₩₸])\s*\b(\d+(?:[.,]\d+)?)")
-            .expect("Invalid Regex")
-});
+#[derive(Debug, Clone)]
+struct CachedRates {
+    fetched_at: Instant,
+    rates: HashMap<String, f64>,
+    #[allow(dead_code)]
+    base_code: String,
+}
+
+type Cache = Arc<Mutex<Option<CachedRates>>>;
+
+#[derive(Deserialize, Debug)]
+struct CoinbaseResponse {
+    data: CoinbaseData,
+}
+#[derive(Deserialize, Debug)]
+struct CoinbaseData {
+    currency: String,
+    rates: HashMap<String, String>,
+}
+#[derive(Deserialize, Debug)]
+struct TonApiResponse {
+    rates: HashMap<String, TonRateEntry>,
+}
+#[derive(Deserialize, Debug, Clone)]
+struct TonRateEntry {
+    prices: HashMap<String, f64>,
+}
 
 pub struct CurrencyConverter {
     cache: Cache,
     client: Client,
     currency_info: HashMap<String, CurrencyConfig>,
     target_currencies: Vec<String>,
-    language: OutputLanguage,
+    #[allow(dead_code)]
+    language: OutputLanguage, // when
+
+    // for fucking ton api
+    ton_tickers: Vec<String>,
+    ton_addresses: Vec<String>,
+    ton_ticker_to_code: HashMap<String, String>, // <"ton", "TON">
+    ton_address_to_code: HashMap<String, String>, // <"EQ..NOT", "NOT">
 }
 
 fn get_plural_form(number: u64, one: &str, few: &str, many: &str) -> String {
     let last_two_digits = number % 100;
     let last_digit = number % 10;
-    // if last_two_digits >= 11 && last_two_digits <= 19 {
     if (11..=19).contains(&last_two_digits) {
         many.to_string()
     } else if last_digit == 1 {
         one.to_string()
     } else if (2..=4).contains(&last_digit) {
-        // } else if last_digit >= 2 && last_digit <= 4 {
         few.to_string()
     } else {
         many.to_string()
@@ -113,31 +216,38 @@ impl CurrencyConverter {
         let config_path_str = CURRENCY_CONFIG_PATH;
         let config_content = fs::read_to_string(config_path_str)
             .map_err(|e| ConvertError::ConfigFileReadError(config_path_str.to_string(), e))?;
-
         let currencies: Vec<CurrencyConfig> = serde_json::from_str(&config_content)
             .map_err(|e| ConvertError::ConfigFileParseError(config_path_str.to_string(), e))?;
 
         let mut currency_map = HashMap::new();
         let mut target_codes = Vec::new();
 
+        // for fucking ton api
+        let mut ton_tickers = Vec::new();
+        let mut ton_addresses = Vec::new();
+        let mut ton_ticker_to_code = HashMap::new();
+        let mut ton_address_to_code = HashMap::new();
+
         for currency in currencies {
             if currency.is_target {
                 target_codes.push(currency.code.clone());
             }
-            currency_map.insert(currency.code.clone(), currency);
-        }
 
-        if currency_map.is_empty() {
-            eprintln!(
-                "Warning: No currency configurations loaded from {}.",
-                config_path_str
-            );
-        }
-        if target_codes.is_empty() {
-            eprintln!(
-                "Warning: No target currencies defined in {}.",
-                config_path_str
-            );
+            if currency.source == "tonapi"
+                && let Some(identifier) = &currency.api_identifier
+            {
+                if identifier.len() > 10
+                    && (identifier.starts_with("EQ") || identifier.starts_with("UQ"))
+                {
+                    ton_addresses.push(identifier.clone());
+                    ton_address_to_code.insert(identifier.clone(), currency.code.clone());
+                } else {
+                    let lower_ticker = identifier.to_lowercase();
+                    ton_tickers.push(lower_ticker.clone());
+                    ton_ticker_to_code.insert(lower_ticker, currency.code.clone());
+                }
+            }
+            currency_map.insert(currency.code.clone(), currency);
         }
 
         Ok(CurrencyConverter {
@@ -146,54 +256,302 @@ impl CurrencyConverter {
             currency_info: currency_map,
             target_currencies: target_codes,
             language,
+            ton_tickers,
+            ton_addresses,
+            ton_ticker_to_code,
+            ton_address_to_code,
         })
     }
 
-    async fn fetch_rates(&self) -> Result<ApiResponse, ConvertError> {
-        let response = self.client.get(API_URL).send().await?;
-        let status = response.status();
-        if !status.is_success() {
-            let text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Failed to get error body".to_string());
-            return Err(ConvertError::ApiError(format!(
-                "API request failed with status {}: {}",
-                status, text
-            )));
+    async fn fetch_crypto_rates(&self) -> Result<HashMap<String, f64>, ConvertError> {
+        let all_tokens = [self.ton_tickers.as_slice(), self.ton_addresses.as_slice()].concat();
+        if all_tokens.is_empty() {
+            return Ok(HashMap::new());
         }
-        let api_response = response.json::<ApiResponse>().await?;
-        if api_response.result != "success" {
-            return Err(ConvertError::ApiError(format!(
-                "API indicated failure. Result: {}",
-                api_response.result
-            )));
-        }
-        Ok(api_response)
+
+        let tokens_str = all_tokens.join(",");
+        let response = self
+            .client
+            .get(TONAPI_URL)
+            .query(&[("tokens", &tokens_str), ("currencies", &"uah".to_string())])
+            .send()
+            .await?;
+
+        let parsed = response.json::<TonApiResponse>().await?;
+
+        let mut crypto_rates = HashMap::new();
+
+        parsed
+            .rates
+            .iter()
+            .for_each(|(api_identifier, rate_entry)| {
+                let mut code: Option<String> = None;
+
+                if let Some(found_code) = self.ton_address_to_code.get(api_identifier) {
+                    code = Some(found_code.clone());
+                } else if let Some(found_code) =
+                    self.ton_ticker_to_code.get(&api_identifier.to_lowercase())
+                {
+                    code = Some(found_code.clone());
+                }
+
+                if let Some(found_code) = code {
+                    if let Some(price_in_uah) = rate_entry.prices.get("UAH") {
+                        crypto_rates.insert(found_code, *price_in_uah);
+                    }
+                } else {
+                    // ???
+                    eprintln!(
+                        "[DEBUG] Skipped unknown API identifier from TonAPI: {}",
+                        api_identifier
+                    );
+                }
+            });
+        Ok(crypto_rates)
     }
 
-    async fn get_rates(&self) -> Result<ApiResponse, ConvertError> {
-        let cache_guard = self.cache.lock().await;
+    async fn fetch_fiat_rates(&self) -> Result<HashMap<String, f64>, ConvertError> {
+        let response = self.client.get(COINBASE_API_URL).send().await?;
+        let parsed = response.json::<CoinbaseResponse>().await?;
+        let mut rates = parsed
+            .data
+            .rates
+            .into_iter()
+            .filter_map(|(currency_code, rate_str)| {
+                rate_str.parse::<f64>().ok().and_then(|rate_val| {
+                    if rate_val != 0.0 {
+                        Some((currency_code, 1.0 / rate_val))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect::<HashMap<String, f64>>();
+        rates.insert(parsed.data.currency, 1.0);
+        Ok(rates)
+    }
 
-        if let Some(cached_data) = &*cache_guard {
-            if cached_data.fetched_at.elapsed() < Duration::from_secs(CACHE_DURATION_SECS) {
-                let data_clone = cached_data.data.clone();
-                return Ok(data_clone);
-            }
+    async fn fetch_rates(&self) -> Result<CachedRates, ConvertError> {
+        let (fiat_result, crypto_result) =
+            tokio::join!(self.fetch_fiat_rates(), self.fetch_crypto_rates());
+
+        let mut combined_rates = fiat_result.map_err(|e| {
+            eprintln!("CRITICAL: Failed to fetch vital fiat rates: {}", e);
+            e
+        })?;
+
+        if let Ok(crypto_rates) = crypto_result {
+            combined_rates.extend(crypto_rates);
         }
 
-        drop(cache_guard);
+        if combined_rates.is_empty() {
+            return Err(ConvertError::NoRatesFetched);
+        }
 
-        let rates_data = self.fetch_rates().await?;
-
-        let mut cache_guard = self.cache.lock().await;
-
-        *cache_guard = Some(CachedRates {
+        Ok(CachedRates {
             fetched_at: Instant::now(),
-            data: rates_data.clone(),
-        });
+            rates: combined_rates,
+            base_code: "UAH".to_string(),
+        })
+    }
 
-        Ok(rates_data)
+    async fn get_rates(&self) -> Result<CachedRates, ConvertError> {
+        let mut cache_guard = self.cache.lock().await;
+        if let Some(cached_data) = &*cache_guard
+            && cached_data.fetched_at.elapsed() < Duration::from_secs(CACHE_DURATION_SECS)
+        {
+            return Ok(cached_data.clone());
+        }
+
+        let new_rates = self.fetch_rates().await?;
+
+        *cache_guard = Some(new_rates.clone());
+        Ok(new_rates)
+    }
+
+    pub fn parse_number_words(text: &str) -> Option<f64> {
+        let state = text
+            .split_whitespace()
+            .filter_map(|word| WORD_VALUES.get(word.to_lowercase().as_str()))
+            .fold(ParseState::default(), |mut state, info| {
+                if info.is_multiplier {
+                    let chunk_to_add = if state.current_chunk == 0.0 {
+                        1.0
+                    } else {
+                        state.current_chunk
+                    };
+                    state.total += chunk_to_add * info.value;
+                    state.current_chunk = 0.0;
+                } else if info.value == 100.0 && state.current_chunk > 0.0 {
+                    state.current_chunk *= info.value;
+                } else {
+                    state.current_chunk += info.value;
+                }
+                state
+            });
+
+        let result = state.total + state.current_chunk;
+
+        if result > 0.0 {
+            Some(result)
+        } else {
+            if text
+                .split_whitespace()
+                .any(|w| w == "ноль" || w == "нуль" || w == "zero")
+            {
+                Some(0.0)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn parse_text_for_currencies(
+        &self,
+        text: &str,
+    ) -> Result<Vec<DetectedCurrency>, ConvertError> {
+        let parse_amount_or_words = |amount_str: &str| -> Option<f64> {
+            let first_char = amount_str.chars().next();
+            if first_char.map_or(false, |c| {
+                c.is_alphabetic() && c.to_lowercase().next() != Some('a')
+            }) {
+                Self::parse_number_words(amount_str)
+            } else {
+                Self::parse_amount_with_suffix(amount_str)
+            }
+        };
+
+        let currencies = CURRENCY_REGEX
+            .captures_iter(text)
+            .filter_map(|cap| {
+                let (amount, identifier_str) =
+                    // {num}{symbol} with hidden {multiplier}
+                    if let (Some(num_str), Some(identifier)) = (cap.get(2), cap.get(3)) {
+                        let base_amount = parse_amount_or_words(num_str.as_str().trim())?;
+
+                        // check multiplier
+                        let final_amount = if let Some(multiplier_match) = cap.get(1) {
+                            let multiplier_value = WORD_VALUES.get(multiplier_match.as_str().to_lowercase().as_str())?.value;
+                            base_amount * multiplier_value
+                        } else {
+                            base_amount
+                        };
+
+                        Some((final_amount, identifier.as_str().trim()))
+                    }
+                    // {symbol}{num}
+                    else if let (Some(identifier), Some(amount_str)) = (cap.get(4), cap.get(5)) {
+                        let amount = parse_amount_or_words(amount_str.as_str().trim())?;
+                        Some((amount, identifier.as_str()))
+                    }
+                    // {num}{symbol}
+                    else if let (Some(amount_str), Some(identifier)) = (cap.get(6), cap.get(7)) {
+                        let amount = parse_amount_or_words(amount_str.as_str().trim())?;
+                        Some((amount, identifier.as_str()))
+                    } else {
+                        None
+                    }?;
+
+                let info = self.find_currency_info_by_identifier(identifier_str)?;
+
+                Some(DetectedCurrency {
+                    amount,
+                    currency_code: info.code.clone(),
+                })
+            })
+            .collect();
+
+        Ok(currencies)
+    }
+
+    pub fn parse_amount_with_suffix(amount_str: &str) -> Option<f64> {
+        let s = amount_str.trim().to_lowercase().replace(['_', ' '], "");
+        if s.is_empty() {
+            return None;
+        }
+
+        let number_part_str = {
+            let has_comma = s.contains(',');
+            let has_dot = s.contains('.');
+
+            if has_comma {
+                s.replace('.', "").replace(',', ".")
+            } else if has_dot {
+                if let Some(last_dot_pos) = s.rfind('.') {
+                    let after_last_dot = &s[last_dot_pos + 1..];
+
+                    let last_part_is_suffix = after_last_dot.chars().any(|c| !c.is_digit(10));
+
+                    if !last_part_is_suffix && after_last_dot.len() == 3 {
+                        s.replace('.', "")
+                    } else {
+                        let before_last_dot = &s[..last_dot_pos];
+                        let remaining_part = &s[last_dot_pos..];
+                        before_last_dot.replace('.', "") + remaining_part
+                    }
+                } else {
+                    s
+                }
+            } else {
+                s
+            }
+        };
+
+        let get_multiplier = |suffix: &str| -> Option<f64> {
+            match suffix {
+                "к" | "k" | "тыс" => Some(1_000.0),
+                "м" | "m" | "млн" | "кк" | "kk" => Some(1_000_000.0),
+                "б" | "b" | "млрд" => Some(1_000_000_000.0),
+                "т" | "t" | "трлн" => Some(1_000_000_000_000.0),
+                _ => None,
+            }
+        };
+
+        // single pattern check ($1k200)
+        if let Some(caps) = INFIX_K_RE.captures(&number_part_str) {
+            let before_k_str = caps.get(1).unwrap().as_str();
+            let after_k_str = caps.get(2).unwrap().as_str();
+
+            return Self::parse_amount_with_suffix(before_k_str).and_then(|before_val| {
+                after_k_str
+                    .parse::<f64>()
+                    .ok()
+                    .map(|after_val| before_val * 1000.0 + after_val)
+            });
+        }
+
+        // multiple pattern check ($1m2k300)
+        COMPONENT_RE
+            .captures_iter(&number_part_str)
+            .try_fold((0.0, 0), |(current_total, last_end), cap| {
+                let full_match = cap.get(0).unwrap();
+                if full_match.start() != last_end {
+                    return Err("Invalid character between components");
+                }
+                let num_str = cap.get(1).unwrap().as_str();
+                let suffix_str = cap.get(2).unwrap().as_str();
+                num_str
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(|num| get_multiplier(suffix_str).map(|mult| num * mult))
+                    .map(|value| (current_total + value, full_match.end()))
+                    .ok_or("Failed to parse component")
+            })
+            .ok()
+            .and_then(|(current_total, full_match_end)| {
+                let tail = &number_part_str[full_match_end..];
+                if tail.is_empty() {
+                    Some(current_total)
+                } else {
+                    if full_match_end > 0 && tail.chars().any(|c| c.is_alphabetic()) {
+                        return None;
+                    }
+                    tail.parse::<f64>()
+                        .ok()
+                        .map(|tail_val| current_total + tail_val)
+                }
+            })
+            .or_else(|| number_part_str.parse::<f64>().ok())
     }
 
     fn find_currency_info(&self, code: &str) -> Option<&CurrencyConfig> {
@@ -202,20 +560,10 @@ impl CurrencyConverter {
 
     fn find_currency_info_by_identifier(&self, identifier: &str) -> Option<&CurrencyConfig> {
         let lower_identifier = identifier.to_lowercase().replace(['.', ' '], "");
-        let clean_identifier = if lower_identifier.starts_with("belarusian")
-            && lower_identifier.contains("ruble")
-        {
-            "belarusianruble"
-        } else if lower_identifier.starts_with("бел") && lower_identifier.contains("руб") {
-            "белруб"
-        } else {
-            &lower_identifier
-        };
-
         self.currency_info.values().find(|info| {
             info.patterns
                 .iter()
-                .any(|p| p.replace(['.', ' '], "") == clean_identifier)
+                .any(|p| p.to_lowercase().replace(['.', ' '], "") == lower_identifier)
                 || info.symbol == identifier
         })
     }
@@ -225,57 +573,38 @@ impl CurrencyConverter {
         from_code: &str,
         to_code: &str,
         rates_map: &HashMap<String, f64>,
-        base_code: &str,
     ) -> Result<f64, ConvertError> {
         if from_code == to_code {
             return Ok(amount);
         }
-        let rate_from = if from_code == base_code {
-            1.0
-        } else {
-            *rates_map
-                .get(from_code)
-                .ok_or_else(|| ConvertError::RateNotFound(from_code.to_string()))?
-        };
-        let rate_to = if to_code == base_code {
-            1.0
-        } else {
-            *rates_map
-                .get(to_code)
-                .ok_or_else(|| ConvertError::RateNotFound(to_code.to_string()))?
-        };
-        if rate_from == 0.0 {
-            return Err(ConvertError::InternalError(format!(
-                "Rate for base currency '{}' is zero.",
-                from_code
-            )));
-        }
-        Ok(amount * (rate_to / rate_from))
+        let rate_from = *rates_map
+            .get(from_code)
+            .ok_or_else(|| ConvertError::RateNotFound(from_code.to_string()))?;
+
+        let rate_to = *rates_map
+            .get(to_code)
+            .ok_or_else(|| ConvertError::RateNotFound(to_code.to_string()))?;
+
+        Ok(amount * rate_from / rate_to)
     }
 
     fn format_conversion_result(
         &self,
         original: &DetectedCurrency,
-        rates_data: &ApiResponse,
+        rates_data: &CachedRates,
     ) -> Result<String, ConvertError> {
         let mut result = String::new();
         let original_info = self
             .find_currency_info(&original.currency_code)
             .ok_or_else(|| ConvertError::CurrencyNotFound(original.currency_code.clone()))?;
 
-        let original_word = match self.language {
-            OutputLanguage::Russian => {
-                let amount_int = original.amount.trunc() as u64;
-                get_plural_form(
-                    amount_int,
-                    &original_info.one,
-                    &original_info.few,
-                    &original_info.many,
-                )
-            } // OutputLanguage::English => {
-              //     get_plural_form_en(original.amount, &original_info.one_en, &original_info.many_en)
-              // }
-        };
+        let original_word = get_plural_form(
+            original.amount.trunc() as u64,
+            &original_info.one,
+            &original_info.few,
+            &original_info.many,
+        );
+
         result.push_str(&format!(
             "{} {:.2}{} {}\n\n",
             original_info.flag, original.amount, original_info.symbol, original_word
@@ -292,32 +621,19 @@ impl CurrencyConverter {
                     &original.currency_code,
                     target_code,
                     &rates_data.rates,
-                    &rates_data.base_code,
                 ) {
                     Ok(converted_amount) => {
-                        let word = match self.language {
-                            OutputLanguage::Russian => {
-                                let amount_int = converted_amount.trunc() as u64;
-                                get_plural_form(
-                                    amount_int,
-                                    &target_info.one,
-                                    &target_info.few,
-                                    &target_info.many,
-                                )
-                            } // OutputLanguage::English => {
-                              //     get_plural_form_en(converted_amount, &target_info.one_en, &target_info.many_en)
-                              // }
-                        };
+                        let word = get_plural_form(
+                            converted_amount.trunc() as u64,
+                            &target_info.one,
+                            &target_info.few,
+                            &target_info.many,
+                        );
+
                         result.push_str(&format!(
                             "{} {:.2}{} {}\n",
                             target_info.flag, converted_amount, target_info.symbol, word
                         ));
-                    }
-                    Err(ConvertError::RateNotFound(missing_code)) => {
-                        eprintln!(
-                            "Warning: Rate not found for '{}' in API response when converting from {}. Skipping.",
-                            missing_code, original.currency_code
-                        );
                     }
                     Err(e) => {
                         eprintln!(
@@ -326,18 +642,9 @@ impl CurrencyConverter {
                         );
                     }
                 }
-            } else {
-                eprintln!(
-                    "Critical Warning: Currency info not found for target code '{}' defined in target_currencies.",
-                    target_code
-                );
             }
         }
-
-        if result.ends_with('\n') {
-            result.pop();
-        }
-        Ok(result)
+        Ok(result.trim_end().to_string())
     }
 
     pub async fn process_text(&self, text: &str) -> Result<Vec<String>, ConvertError> {
@@ -354,35 +661,5 @@ impl CurrencyConverter {
             }
         }
         Ok(results)
-    }
-
-    pub(crate) fn parse_text_for_currencies(
-        &self,
-        text: &str,
-    ) -> Result<Vec<DetectedCurrency>, ConvertError> {
-        let mut detected: Vec<DetectedCurrency> = Vec::new();
-        for cap in CURRENCY_REGEX.captures_iter(text) {
-            let (amount_str, identifier_str) =
-                if let (Some(amount), Some(identifier)) = (cap.get(1), cap.get(2)) {
-                    (amount.as_str(), identifier.as_str().trim())
-                } else if let (Some(symbol), Some(amount)) = (cap.get(3), cap.get(4)) {
-                    (amount.as_str(), symbol.as_str())
-                } else {
-                    continue;
-                };
-
-            let amount_str_cleaned = amount_str.replace(',', ".");
-            if let Ok(amount) = amount_str_cleaned.parse::<f64>() {
-                if let Some(info) = self.find_currency_info_by_identifier(identifier_str) {
-                    detected.push(DetectedCurrency {
-                        amount,
-                        currency_code: info.code.clone(),
-                    });
-                }
-            } else {
-                eprintln!("Warning: Failed to parse amount '{}'", amount_str);
-            }
-        }
-        Ok(detected)
     }
 }

@@ -1,5 +1,5 @@
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{read_json_config, JsonConfig};
+use crate::util::json::{JsonConfig, read_json_config};
 use dotenv::dotenv;
 use std::sync::Arc;
 use teloxide::prelude::*;
@@ -7,7 +7,7 @@ use teloxide::prelude::*;
 #[derive(Clone)]
 pub struct Config {
     bot: Bot,
-    #[warn(dead_code)]
+    #[allow(dead_code)]
     owners: Vec<i64>,
     version: String,
     json_config: JsonConfig,
@@ -48,6 +48,7 @@ impl Config {
         &self.version
     }
 
+    #[allow(dead_code)]
     pub fn is_id_in_owners(&self, id: i64) -> bool {
         self.owners.contains(&id)
     }

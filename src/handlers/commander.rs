@@ -3,8 +3,8 @@ use crate::handlers::commands::{
     speech_recognition::speech_recognition_handler, start::start_handler,
 };
 use crate::util::{enums::Command, errors::MyError};
-use teloxide::prelude::Message;
 use teloxide::Bot;
+use teloxide::prelude::Message;
 use tokio::task;
 
 pub(crate) async fn command_handlers(

@@ -2,11 +2,10 @@ use crate::config::Config;
 use crate::handlers::messages::sounder::sound_handlers;
 use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
-use teloxide::payloads::SendMessageSetters;
-use teloxide::prelude::Message;
-use teloxide::requests::Requester;
-use teloxide::types::{ParseMode, ReplyParameters};
 use teloxide::Bot;
+use teloxide::payloads::SendMessageSetters;
+use teloxide::requests::Requester;
+use teloxide::types::{Message, ParseMode, ReplyParameters};
 use tokio::task;
 
 pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), MyError> {
@@ -18,15 +17,20 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
 
     task::spawn(async move {
         let bot = bot_clone;
-        let message = message_clone;
-        let config = config_clone;
-        let original_user_id = message.from().map(|u| u.id.0).unwrap_or(0);
+        let message = &message_clone;
+        let config = &config_clone;
+        let user = message.from.clone().unwrap();
 
-        if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some() {
-            if let Err(e) = sound_handlers(bot, message, &config).await {
+        if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some()
+        {
+            if let Err(e) = sound_handlers(bot, message.clone(), &config).await {
                 eprintln!("Sound handler failed: {:?}", e);
             }
         } else if let Some(text) = message.text() {
+            if user.is_bot {
+                return;
+            }
+
             let converter = config.get_currency_converter();
             let text_to_process = text;
 
@@ -49,7 +53,7 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
                         if let Err(e) = bot
                             .send_message(message.chat.id, final_message)
                             .parse_mode(ParseMode::Html)
-                            .reply_markup(delete_message_button(original_user_id))
+                            .reply_markup(delete_message_button(user.id.0))
                             .reply_parameters(ReplyParameters::new(message.id))
                             .await
                         {
