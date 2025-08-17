@@ -424,7 +424,6 @@ impl CurrencyConverter {
         let currencies = CURRENCY_REGEX
             .captures_iter(text)
             .filter_map(|cap| {
-                println!("{:#?}", cap);
                 let (amount, identifier_str) =
                     // {num}{symbol} with hidden {multiplier}
                     if let (Some(num_str), Some(identifier)) = (cap.get(2), cap.get(3)) {
