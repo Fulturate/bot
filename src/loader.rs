@@ -48,7 +48,9 @@ async fn run_bot(config: &Config) -> Result<(), MyError> {
 
 async fn run_database(config: &Config) -> Result<(), MyError> {
     let url = config.get_mongodb_url().to_owned();
-    set_global_client(url).await?;
+    set_global_client(url.clone()).await?;
+
+    println!("Database connected successfully\nURL: {}", url);
 
     Ok(())
 }
