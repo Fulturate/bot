@@ -33,7 +33,7 @@ pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Resul
         </pre>",
         version, api_ping, cpu_usage_percent, used_ram_mb, total_ram_mb
     );
-    
+
     bot.send_message(message.chat.id, response_message)
         .reply_parameters(ReplyParameters::new(message.id))
         .parse_mode(ParseMode::Html)

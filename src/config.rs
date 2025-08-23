@@ -12,6 +12,7 @@ pub struct Config {
     version: String,
     json_config: JsonConfig,
     currency_converter: Arc<CurrencyConverter>,
+    mongodb_url: String,
 }
 
 impl Config {
@@ -30,6 +31,7 @@ impl Config {
 
         let json_config = read_json_config("config.json").expect("Unable to read config.json");
         let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
+        let mongodb_url = std::env::var("MONGODB_URL").expect("MONGODB_URL expected");
 
         Config {
             bot,
@@ -37,6 +39,7 @@ impl Config {
             version,
             json_config,
             currency_converter,
+            mongodb_url
         }
     }
 
@@ -60,4 +63,6 @@ impl Config {
     pub fn get_currency_converter(&self) -> &CurrencyConverter {
         &self.currency_converter
     }
+    
+    pub fn get_mongodb_url(&self) -> &str { &self.mongodb_url }
 }

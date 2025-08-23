@@ -23,7 +23,7 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
 
         if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some()
         {
-            if let Err(e) = sound_handlers(bot, message.clone(), &config).await {
+            if let Err(e) = sound_handlers(bot, message.clone(), config).await {
                 eprintln!("Sound handler failed: {:?}", e);
             }
         } else if let Some(text) = message.text() {
@@ -34,7 +34,7 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
             let converter = config.get_currency_converter();
             let text_to_process = text;
 
-            match converter.process_text(text_to_process).await {
+            match converter.process_text(text_to_process, &message.chat).await {
                 Ok(mut results) => {
                     if !results.is_empty() {
                         if results.len() > 5 {
