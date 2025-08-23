@@ -1,4 +1,4 @@
-use crate::{db::schemas::CurrencyStruct, util::currency::converter::ConvertError};
+use crate::util::currency::converter::{ConvertError, CurrencyStruct};
 use std::fs;
 
 pub fn get_all_currency_codes(config_file: String) -> Result<Vec<CurrencyStruct>, ConvertError> {
