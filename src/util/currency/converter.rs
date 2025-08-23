@@ -6,6 +6,7 @@ use std::{
 };
 
 use super::structs::WORD_VALUES;
+use crate::db::schemas::CurrencyStruct;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use reqwest::Client;
@@ -14,7 +15,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 const CACHE_DURATION_SECS: u64 = 60 * 10;
-const CURRENCY_CONFIG_PATH: &str = "currencies.json";
+pub const CURRENCY_CONFIG_PATH: &str = "currencies.json";
 const COINBASE_API_URL: &str = "https://api.coinbase.com/v2/exchange-rates?currency=UAH";
 const TONAPI_URL: &str = "https://tonapi.io/v2/rates";
 
@@ -62,7 +63,7 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let config_content = fs::read_to_string(CURRENCY_CONFIG_PATH)
         .map_err(|e| ConvertError::ConfigFileReadError(CURRENCY_CONFIG_PATH.to_string(), e))?;
 
-    let currencies: Vec<CurrencyConfig> = serde_json::from_str(&config_content)
+    let currencies: Vec<CurrencyStruct> = serde_json::from_str(&config_content)
         .map_err(|e| ConvertError::ConfigFileParseError(CURRENCY_CONFIG_PATH.to_string(), e))?;
 
     let mut all_patterns = Vec::new();
@@ -91,7 +92,7 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     let number_words: Vec<String> = WORD_VALUES.keys().map(|s| regex::escape(s)).collect();
 
     let number_suffixes = r"к|k|м|m|б|b|т|t|тыс|млн|млрд|трлн|kk|кк";
-    let repeatable_digits_part = format!(r"(?:[\d.,_\s]+(?:[ \t]*(?:{number_suffixes}))?)+");
+    let repeatable_digits_part = format!(r"(?:[\d.,_ \t]*(?:[ \t]*(?:{number_suffixes}))?)+");
 
     let number_pattern_any = format!(
         r"(?:{}\b|(?:(?:{})\b[ \t]*)+)",
@@ -100,15 +101,22 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     );
 
     let regex_string = format!(
-        r"(?i)(?:^|\s)(?:{}|{}|{})",
-        format!(
+        concat!(
+            r"(?i)(?:^|\s)(?:",
+            r"({digits})[ \t]+({multiplier})[ \t]*({word_patterns})\b",
+            r"|",
             r"(?:({multiplier})[ \t]+)?({number})[ \t]*({word_patterns})\b",
-            multiplier = multiplier_words_part,
-            number = number_pattern_any,
-            word_patterns = patterns_part
+            r"|",
+            r"({symbols})[ \t]*({number})\b",
+            r"|",
+            r"({number})[ \t]*({symbols})",
+            r")",
         ),
-        format!(r"({symbols_part})[ \t]*({number_pattern_any})\b"),
-        format!(r"({number_pattern_any})[ \t]*({symbols_part})")
+        digits = repeatable_digits_part,
+        multiplier = multiplier_words_part,
+        number = number_pattern_any,
+        word_patterns = patterns_part,
+        symbols = symbols_part
     );
 
     Ok(regex_string)
@@ -128,25 +136,6 @@ static COMPONENT_RE: Lazy<Regex> = Lazy::new(|| {
 });
 static INFIX_K_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(\d+(?:[.,]\d+)?)[kк](\d{1,3})$").unwrap());
-
-#[derive(Deserialize, Debug, Clone)]
-struct CurrencyConfig {
-    code: String,
-    source: String,
-    #[serde(default)]
-    api_identifier: Option<String>,
-    symbol: String,
-    flag: String,
-    patterns: Vec<String>,
-    one: String,
-    few: String,
-    many: String,
-    #[allow(dead_code)]
-    one_en: String,
-    #[allow(dead_code)]
-    many_en: String,
-    is_target: bool,
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DetectedCurrency {
@@ -185,7 +174,7 @@ struct TonRateEntry {
 pub struct CurrencyConverter {
     cache: Cache,
     client: Client,
-    currency_info: HashMap<String, CurrencyConfig>,
+    currency_info: HashMap<String, CurrencyStruct>,
     target_currencies: Vec<String>,
     #[allow(dead_code)]
     language: OutputLanguage, // when
@@ -216,7 +205,7 @@ impl CurrencyConverter {
         let config_path_str = CURRENCY_CONFIG_PATH;
         let config_content = fs::read_to_string(config_path_str)
             .map_err(|e| ConvertError::ConfigFileReadError(config_path_str.to_string(), e))?;
-        let currencies: Vec<CurrencyConfig> = serde_json::from_str(&config_content)
+        let currencies: Vec<CurrencyStruct> = serde_json::from_str(&config_content)
             .map_err(|e| ConvertError::ConfigFileParseError(config_path_str.to_string(), e))?;
 
         let mut currency_map = HashMap::new();
@@ -394,15 +383,13 @@ impl CurrencyConverter {
 
         if result > 0.0 {
             Some(result)
+        } else if text
+            .split_whitespace()
+            .any(|w| w == "ноль" || w == "нуль" || w == "zero")
+        {
+            Some(0.0)
         } else {
-            if text
-                .split_whitespace()
-                .any(|w| w == "ноль" || w == "нуль" || w == "zero")
-            {
-                Some(0.0)
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -412,9 +399,8 @@ impl CurrencyConverter {
     ) -> Result<Vec<DetectedCurrency>, ConvertError> {
         let parse_amount_or_words = |amount_str: &str| -> Option<f64> {
             let first_char = amount_str.chars().next();
-            if first_char.map_or(false, |c| {
-                c.is_alphabetic() && c.to_lowercase().next() != Some('a')
-            }) {
+            if first_char.is_some_and(|c| c.is_alphabetic() && c.to_lowercase().next() != Some('a'))
+            {
                 Self::parse_number_words(amount_str)
             } else {
                 Self::parse_amount_with_suffix(amount_str)
@@ -425,13 +411,26 @@ impl CurrencyConverter {
             .captures_iter(text)
             .filter_map(|cap| {
                 let (amount, identifier_str) =
+                    // {num} {multiplier} {symbol}
+                    if let (Some(num_str), Some(multiplier_match), Some(identifier)) =
+                        (cap.get(1), cap.get(2), cap.get(3))
+                    {
+                        let base_amount = Self::parse_amount_with_suffix(num_str.as_str().trim())?;
+                        let multiplier_value = WORD_VALUES
+                            .get(multiplier_match.as_str().to_lowercase().as_str())?
+                            .value;
+                        Some((base_amount * multiplier_value, identifier.as_str().trim()))
+                    }
+
                     // {num}{symbol} with hidden {multiplier}
-                    if let (Some(num_str), Some(identifier)) = (cap.get(2), cap.get(3)) {
+                    else if let (Some(num_str), Some(identifier)) = (cap.get(5), cap.get(6)) {
                         let base_amount = parse_amount_or_words(num_str.as_str().trim())?;
 
                         // check multiplier
-                        let final_amount = if let Some(multiplier_match) = cap.get(1) {
-                            let multiplier_value = WORD_VALUES.get(multiplier_match.as_str().to_lowercase().as_str())?.value;
+                        let final_amount = if let Some(multiplier_match) = cap.get(4) {
+                            let multiplier_value = WORD_VALUES
+                                .get(multiplier_match.as_str().to_lowercase().as_str())?
+                                .value;
                             base_amount * multiplier_value
                         } else {
                             base_amount
@@ -440,12 +439,12 @@ impl CurrencyConverter {
                         Some((final_amount, identifier.as_str().trim()))
                     }
                     // {symbol}{num}
-                    else if let (Some(identifier), Some(amount_str)) = (cap.get(4), cap.get(5)) {
+                    else if let (Some(identifier), Some(amount_str)) = (cap.get(7), cap.get(8)) {
                         let amount = parse_amount_or_words(amount_str.as_str().trim())?;
                         Some((amount, identifier.as_str()))
                     }
                     // {num}{symbol}
-                    else if let (Some(amount_str), Some(identifier)) = (cap.get(6), cap.get(7)) {
+                    else if let (Some(amount_str), Some(identifier)) = (cap.get(9), cap.get(10)) {
                         let amount = parse_amount_or_words(amount_str.as_str().trim())?;
                         Some((amount, identifier.as_str()))
                     } else {
@@ -477,7 +476,7 @@ impl CurrencyConverter {
 
         let number_part_str = if let Some(last_dot_pos) = s.rfind('.') {
             let after_last_dot = &s[last_dot_pos + 1..];
-            let is_thousand_separator = !after_last_dot.chars().any(|c| !c.is_digit(10))
+            let is_thousand_separator = !after_last_dot.chars().any(|c| !c.is_ascii_digit())
                 && after_last_dot.len() == 3
                 && s.chars().filter(|&c| c == '.').count() > 0;
 
@@ -549,11 +548,11 @@ impl CurrencyConverter {
             .or_else(|| number_part_str.parse::<f64>().ok())
     }
 
-    fn find_currency_info(&self, code: &str) -> Option<&CurrencyConfig> {
+    fn find_currency_info(&self, code: &str) -> Option<&CurrencyStruct> {
         self.currency_info.get(code)
     }
 
-    fn find_currency_info_by_identifier(&self, identifier: &str) -> Option<&CurrencyConfig> {
+    fn find_currency_info_by_identifier(&self, identifier: &str) -> Option<&CurrencyStruct> {
         let lower_identifier = identifier.to_lowercase().replace(['.', ' '], "");
         self.currency_info.values().find(|info| {
             info.patterns
@@ -647,6 +646,7 @@ impl CurrencyConverter {
         if detected_currencies.is_empty() {
             return Ok(Vec::new());
         }
+
         let rates_data = self.get_rates().await?;
         let mut results = Vec::new();
         for detected in detected_currencies {
