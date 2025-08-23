@@ -2,6 +2,7 @@ mod config;
 mod handlers;
 mod loader;
 mod util;
+pub(crate) mod db;
 
 use crate::loader::run;
 
