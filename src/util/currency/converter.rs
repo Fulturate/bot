@@ -6,11 +6,14 @@ use std::{
 };
 
 use super::structs::WORD_VALUES;
-use crate::db::schemas::CurrencyStruct;
+use crate::db::schemas::group::Group;
+use crate::db::schemas::user::User;
 use once_cell::sync::Lazy;
+use oximod::Model;
 use regex::Regex;
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use teloxide::types::Chat;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -171,11 +174,30 @@ struct TonRateEntry {
     prices: HashMap<String, f64>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CurrencyStruct {
+    pub code: String,
+    pub source: String,
+    #[serde(default)]
+    pub api_identifier: Option<String>,
+    pub symbol: String,
+    pub flag: String,
+    pub patterns: Vec<String>,
+    pub one: String,
+    pub few: String,
+    pub many: String,
+    #[allow(dead_code)]
+    pub one_en: String,
+    #[allow(dead_code)]
+    pub many_en: String,
+    pub is_target: bool,
+}
+
 pub struct CurrencyConverter {
     cache: Cache,
     client: Client,
     currency_info: HashMap<String, CurrencyStruct>,
-    target_currencies: Vec<String>,
+    // target_currencies: Vec<String>,
     #[allow(dead_code)]
     language: OutputLanguage, // when
 
@@ -209,7 +231,7 @@ impl CurrencyConverter {
             .map_err(|e| ConvertError::ConfigFileParseError(config_path_str.to_string(), e))?;
 
         let mut currency_map = HashMap::new();
-        let mut target_codes = Vec::new();
+        // let mut target_codes = Vec::new();
 
         // for fucking ton api
         let mut ton_tickers = Vec::new();
@@ -218,9 +240,9 @@ impl CurrencyConverter {
         let mut ton_address_to_code = HashMap::new();
 
         for currency in currencies {
-            if currency.is_target {
-                target_codes.push(currency.code.clone());
-            }
+            // if currency.is_target {
+            //     target_codes.push(currency.code.clone());
+            // }
 
             if currency.source == "tonapi"
                 && let Some(identifier) = &currency.api_identifier
@@ -243,7 +265,7 @@ impl CurrencyConverter {
             cache: Arc::new(Mutex::new(None)),
             client: Client::new(),
             currency_info: currency_map,
-            target_currencies: target_codes,
+            // target_currencies: target_codes,
             language,
             ton_tickers,
             ton_addresses,
@@ -586,6 +608,7 @@ impl CurrencyConverter {
         &self,
         original: &DetectedCurrency,
         rates_data: &CachedRates,
+        target_codes: &[String],
     ) -> Result<String, ConvertError> {
         let mut result = String::new();
         let original_info = self
@@ -604,7 +627,7 @@ impl CurrencyConverter {
             original_info.flag, original.amount, original_info.symbol, original_word
         ));
 
-        for target_code in &self.target_currencies {
+        for target_code in target_codes {
             if target_code == &original.currency_code {
                 continue;
             }
@@ -641,7 +664,32 @@ impl CurrencyConverter {
         Ok(result.trim_end().to_string())
     }
 
-    pub async fn process_text(&self, text: &str) -> Result<Vec<String>, ConvertError> {
+    pub async fn process_text(&self, text: &str, chat: &Chat) -> Result<Vec<String>, ConvertError> {
+        let chat_id_str = chat.id.to_string();
+        let target_codes = if chat.is_private() {
+            match User::find_one(mongodb::bson::doc! { "user_id": chat_id_str }).await {
+                Ok(Some(user)) => user
+                    .convertable_currencies
+                    .iter()
+                    .map(|c| c.code.clone())
+                    .collect(),
+                _ => Vec::new(),
+            }
+        } else {
+            match Group::find_one(mongodb::bson::doc! { "group_id": chat_id_str }).await {
+                Ok(Some(group)) => group
+                    .convertable_currencies
+                    .iter()
+                    .map(|c| c.code.clone())
+                    .collect(),
+                _ => Vec::new(),
+            }
+        };
+
+        if target_codes.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let detected_currencies = self.parse_text_for_currencies(text)?;
         if detected_currencies.is_empty() {
             return Ok(Vec::new());
@@ -650,7 +698,7 @@ impl CurrencyConverter {
         let rates_data = self.get_rates().await?;
         let mut results = Vec::new();
         for detected in detected_currencies {
-            match self.format_conversion_result(&detected, &rates_data) {
+            match self.format_conversion_result(&detected, &rates_data, &target_codes) {
                 Ok(formatted) => results.push(formatted),
                 Err(e) => eprintln!("Error formatting conversion for {:?}: {}", detected, e),
             }
