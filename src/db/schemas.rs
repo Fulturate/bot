@@ -4,7 +4,6 @@ pub mod user;
 use crate::util::currency::converter::CurrencyStruct;
 use async_trait::async_trait;
 use oximod::_error::oximod_error::OxiModError;
-use serde::{Deserialize, Serialize};
 
 #[async_trait]
 pub trait BaseFunctions: Sized {

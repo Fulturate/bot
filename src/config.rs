@@ -8,7 +8,7 @@ use teloxide::prelude::*;
 pub struct Config {
     bot: Bot,
     #[allow(dead_code)]
-    owners: Vec<i64>,
+    owners: Vec<String>,
     version: String,
     json_config: JsonConfig,
     currency_converter: Arc<CurrencyConverter>,
@@ -23,7 +23,7 @@ impl Config {
         let version = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION expected");
         let bot = Bot::new(bot_token);
 
-        let owners: Vec<i64> = std::env::var("OWNERS")
+        let owners: Vec<String> = std::env::var("OWNERS")
             .expect("OWNERS expected")
             .split(',')
             .filter_map(|id| id.trim().parse().ok())
@@ -52,7 +52,7 @@ impl Config {
     }
 
     #[allow(dead_code)]
-    pub fn is_id_in_owners(&self, id: i64) -> bool {
+    pub fn is_id_in_owners(&self, id: String) -> bool {
         self.owners.contains(&id)
     }
 
