@@ -21,6 +21,10 @@ pub(crate) async fn messages_handlers(bot: Bot, message: Message) -> Result<(), 
         let config = &config_clone;
         let user = message.from.clone().unwrap();
 
+        if message.forward_from_user().map_or(false, |orig| orig.is_bot) {
+            return;
+        }
+
         if message.voice().is_some() || message.video_note().is_some() || message.audio().is_some()
         {
             if let Err(e) = sound_handlers(bot, message.clone(), config).await {
