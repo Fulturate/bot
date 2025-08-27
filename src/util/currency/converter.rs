@@ -6,6 +6,7 @@ use std::{
 };
 
 use super::structs::WORD_VALUES;
+use crate::db::schemas::CurrenciesFunctions;
 use crate::db::schemas::group::Group;
 use crate::db::schemas::user::User;
 use once_cell::sync::Lazy;
@@ -669,7 +670,7 @@ impl CurrencyConverter {
         let target_codes = if chat.is_private() {
             match User::find_one(mongodb::bson::doc! { "user_id": chat_id_str }).await {
                 Ok(Some(user)) => user
-                    .convertable_currencies
+                    .get_currencies()
                     .iter()
                     .map(|c| c.code.clone())
                     .collect(),
@@ -678,7 +679,7 @@ impl CurrencyConverter {
         } else {
             match Group::find_one(mongodb::bson::doc! { "group_id": chat_id_str }).await {
                 Ok(Some(group)) => group
-                    .convertable_currencies
+                    .get_currencies()
                     .iter()
                     .map(|c| c.code.clone())
                     .collect(),

@@ -1,6 +1,8 @@
 use crate::db::schemas::{BaseFunctions, CurrenciesFunctions, CurrencyStruct};
 use async_trait::async_trait;
+use mongodb::bson;
 use mongodb::bson::{doc, oid::ObjectId};
+use mongodb::results::UpdateResult;
 use oximod::{Model, _error::oximod_error::OxiModError};
 use serde::{Deserialize, Serialize};
 
@@ -36,6 +38,7 @@ impl BaseFunctions for User {
     }
 }
 
+#[async_trait]
 impl CurrenciesFunctions for User {
     fn get_id(&self) -> &str {
         &self.user_id
@@ -47,5 +50,28 @@ impl CurrenciesFunctions for User {
 
     fn id_field_name() -> &'static str {
         "user_id"
+    }
+
+    async fn add_currency(
+        user_id: &str,
+        currency: &CurrencyStruct,
+    ) -> Result<UpdateResult, OxiModError> {
+        let currency_to_add = bson::to_bson(currency).unwrap();
+        Self::update_one(
+            doc! {"user_id": user_id},
+            doc! {"$push": {"convertable_currencies": currency_to_add } },
+        )
+        .await
+    }
+
+    async fn remove_currency(
+        user_id: &str,
+        currency: &str,
+    ) -> Result<UpdateResult, OxiModError> {
+        Self::update_one(
+            doc! {"user_id": user_id},
+            doc! {"$pull": {"convertable_currencies": {"code": currency} } },
+        )
+        .await
     }
 }

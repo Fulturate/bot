@@ -1,8 +1,10 @@
 use crate::db::schemas::{BaseFunctions, CurrenciesFunctions, CurrencyStruct};
 use async_trait::async_trait;
+use mongodb::bson;
 use mongodb::bson::{doc, oid::ObjectId};
-use oximod::_error::oximod_error::OxiModError;
+use mongodb::results::UpdateResult;
 use oximod::Model;
+use oximod::_error::oximod_error::OxiModError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Model)]
@@ -39,6 +41,7 @@ impl BaseFunctions for Group {
     }
 }
 
+#[async_trait]
 impl CurrenciesFunctions for Group {
     fn get_id(&self) -> &str {
         &self.group_id
@@ -50,5 +53,25 @@ impl CurrenciesFunctions for Group {
 
     fn id_field_name() -> &'static str {
         "group_id"
+    }
+
+    async fn add_currency(
+        group_id: &str,
+        currency: &CurrencyStruct,
+    ) -> Result<UpdateResult, OxiModError> {
+        let currency_to_add = bson::to_bson(currency).unwrap();
+        Self::update_one(
+            doc! {"group_id": group_id},
+            doc! {"$push": {"convertable_currencies": currency_to_add } },
+        )
+        .await
+    }
+
+    async fn remove_currency(group_id: &str, currency: &str) -> Result<UpdateResult, OxiModError> {
+        Self::update_one(
+            doc! {"group_id": group_id},
+            doc! { "$pull": { "convertable_currencies": { "code": currency } } },
+        )
+        .await
     }
 }

@@ -6,7 +6,6 @@ use crate::{
     handlers::markups::currency_keyboard::get_all_currency_codes,
     util::{currency::converter::CURRENCY_CONFIG_PATH, errors::MyError},
 };
-use mongodb::{bson, bson::doc};
 use oximod::Model;
 use std::collections::HashSet;
 use teloxide::prelude::*;
@@ -44,19 +43,14 @@ pub async fn handle_currency_update<T: BaseFunctions + CurrenciesFunctions + Mod
 
     let is_enabled = entity.get_currencies().iter().any(|c| c.code == code);
 
-    let (update_doc, action_text) = if is_enabled {
-        let update = doc! { "$pull": { "convertable_currencies": { "code": &code } } };
-        (update, "removed")
+    let (update_func, action_text) = if is_enabled {
+        (T::remove_currency(entity.get_id(), &code), "removed")
     } else {
-        let currency_to_add = all_codes.iter().find(|x| x.code == code).unwrap(); // unwrap безопасен, т.к. мы проверили наличие выше
-        let currency_bson = bson::to_bson(currency_to_add)?;
-        let update = doc! { "$push": { "convertable_currencies": currency_bson } };
-        (update, "added")
+        let currency_to_add = all_codes.iter().find(|x| x.code == code).unwrap();
+        (T::add_currency(entity.get_id(), currency_to_add), "added")
     };
 
-    let filter = doc! { T::id_field_name(): entity.get_id() };
-
-    let message = match T::update_one(filter, update_doc).await {
+    let message = match update_func.await {
         Ok(_) => {
             format!(
                 "Successfully {} <code>{}</code> from currency conversion.",
