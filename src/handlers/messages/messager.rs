@@ -30,13 +30,8 @@ pub(crate) async fn handle_currency(bot: Bot, message: Message) -> Result<(), My
     let config = Config::new().await;
 
     let bot_clone = bot.clone();
-    let message_clone = message.clone();
-    let config_clone = config.clone();
 
     task::spawn(async move {
-        let bot = bot_clone;
-        let message = &message_clone;
-        let config = &config_clone;
         let user = message.from.clone().unwrap();
 
         if message.forward_from_user().is_some_and(|orig| orig.is_bot)
@@ -68,7 +63,7 @@ pub(crate) async fn handle_currency(bot: Bot, message: Message) -> Result<(), My
 
                     let final_message = formatted_blocks.join("\n");
 
-                    if let Err(e) = bot
+                    if let Err(e) = bot_clone
                         .send_message(message.chat.id, final_message)
                         .parse_mode(ParseMode::Html)
                         .reply_markup(delete_message_button(user.id.0))

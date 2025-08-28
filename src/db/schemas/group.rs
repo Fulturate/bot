@@ -33,6 +33,7 @@ impl BaseFunctions for Group {
             .group_id(id.clone())
             .convertable_currencies(vec![]);
         new_group.save().await?;
+        
         <Group as BaseFunctions>::find_by_id(id)
             .await?
             .ok_or_else(|| {

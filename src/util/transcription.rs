@@ -4,12 +4,12 @@ use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
 use bytes::Bytes;
 use gem_rs::types::HarmBlockThreshold;
+use log::{error, info};
 use std::time::Duration;
 use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
-use log::{error, info};
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot

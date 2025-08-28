@@ -3,8 +3,10 @@ use crate::{
     db::functions::get_or_create,
     db::schemas::group::Group,
     db::schemas::user::User,
-    handlers::markups::currency_keyboard::get_all_currency_codes,
-    util::{currency::converter::CURRENCY_CONFIG_PATH, errors::MyError},
+    util::{
+        currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes},
+        errors::MyError,
+    },
 };
 use log::error;
 use oximod::Model;
