@@ -7,6 +7,8 @@ pub enum Command {
     Start(String),
     #[command(description = "Speech recognition", alias = "sr")]
     SpeechRecognition,
+    #[command(description = "Translate", alias = "tr")]
+    Translate(String),
     #[command(parse_with = "split", description = "Set currency to convert")]
     SetCurrency { code: String },
     #[command(description = "List of available currencies to convert")]
