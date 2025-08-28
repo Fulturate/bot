@@ -1,11 +1,65 @@
 use crate::config::Config;
+use crate::db::schemas::user::User;
+use crate::util::currency::converter::get_default_currencies;
 use crate::util::errors::MyError;
+use log::{error, info};
+use mongodb::bson::doc;
+use oximod::Model;
 use std::time::Instant;
 use sysinfo::System;
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters};
 
-pub async fn start_handler(bot: Bot, message: Message, config: &Config) -> Result<(), MyError> {
+pub async fn start_handler(
+    bot: Bot,
+    message: Message,
+    config: &Config,
+    arg: String,
+) -> Result<(), MyError> {
+    if message.chat.is_private() {
+        let user = message.from.clone().unwrap();
+
+        match User::find_one(doc! { "user_id": &user.id.to_string() }).await {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                let necessary_codes = get_default_currencies()?;
+
+                return match User::new()
+                    .user_id(user.id.to_string().clone())
+                    .convertable_currencies(necessary_codes)
+                    .save()
+                    .await
+                {
+                    Ok(_) => {
+                        bot.send_message(
+                            message.chat.id,
+                            "Welcome! You have been successfully registered",
+                        )
+                        .await?;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        error!("Failed to save new user {} to DB: {}", &user.id, e);
+                        bot.send_message(
+                            message.chat.id,
+                            "Something went wrong during registration. Please try again later.",
+                        )
+                        .await?;
+                        Ok(())
+                    }
+                };
+            }
+            Err(e) => {
+                error!("Database error while checking user {}: {}", &user.id, e);
+                bot.send_message(
+                    message.chat.id,
+                    "A database error occurred. Please try again later.",
+                )
+                .await?;
+                return Ok(());
+            }
+        };
+    }
     let version = config.get_version();
 
     let start_time = Instant::now();
