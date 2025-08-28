@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use mongodb::bson;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::results::UpdateResult;
-use oximod::Model;
 use oximod::_error::oximod_error::OxiModError;
+use oximod::Model;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Model)]
@@ -33,6 +33,7 @@ impl BaseFunctions for Group {
             .group_id(id.clone())
             .convertable_currencies(vec![]);
         new_group.save().await?;
+        
         <Group as BaseFunctions>::find_by_id(id)
             .await?
             .ok_or_else(|| {
@@ -49,10 +50,6 @@ impl CurrenciesFunctions for Group {
 
     fn get_currencies(&self) -> &Vec<CurrencyStruct> {
         &self.convertable_currencies
-    }
-
-    fn id_field_name() -> &'static str {
-        "group_id"
     }
 
     async fn add_currency(

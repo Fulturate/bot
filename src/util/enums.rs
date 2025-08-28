@@ -1,4 +1,3 @@
-// use teloxide::macros::BotCommands;
 use teloxide::utils::command::BotCommands;
 
 #[derive(BotCommands, Clone)]

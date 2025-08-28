@@ -16,8 +16,6 @@ pub trait BaseFunctions: Sized {
 pub trait CurrenciesFunctions: Sized {
     fn get_id(&self) -> &str;
     fn get_currencies(&self) -> &Vec<CurrencyStruct>;
-    #[allow(dead_code)] // todo: i don't have a time to remove that
-    fn id_field_name() -> &'static str;
     async fn add_currency(id: &str, currency: &CurrencyStruct)
     -> Result<UpdateResult, OxiModError>;
     async fn remove_currency(id: &str, currency: &str) -> Result<UpdateResult, OxiModError>;

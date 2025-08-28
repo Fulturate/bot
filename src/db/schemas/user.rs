@@ -48,10 +48,6 @@ impl CurrenciesFunctions for User {
         &self.convertable_currencies
     }
 
-    fn id_field_name() -> &'static str {
-        "user_id"
-    }
-
     async fn add_currency(
         user_id: &str,
         currency: &CurrencyStruct,

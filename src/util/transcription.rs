@@ -4,6 +4,7 @@ use crate::util::errors::MyError;
 use crate::util::inline::delete_message_button;
 use bytes::Bytes;
 use gem_rs::types::HarmBlockThreshold;
+use log::{error, info};
 use std::time::Duration;
 use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
@@ -168,7 +169,7 @@ impl Transcription {
                         return split_text(full_text, 4000);
                     } else {
                         attempts += 1;
-                        eprintln!(
+                        info!(
                             "Received empty successful response from transcription service, attempt {}",
                             attempts
                         );
@@ -182,7 +183,7 @@ impl Transcription {
                     }
                     last_error = error.to_string();
 
-                    eprintln!(
+                    error!(
                         "Error with transcription (attempt {}): {:?}",
                         attempts, error
                     );
