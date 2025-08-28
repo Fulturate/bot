@@ -649,7 +649,7 @@ impl CurrencyConverter {
                         );
 
                         result.push_str(&format!(
-                            "{} {:.2}{} {}\n",
+                            "{} {:.5}{} {}\n",
                             target_info.flag, converted_amount, target_info.symbol, word
                         ));
                     }
