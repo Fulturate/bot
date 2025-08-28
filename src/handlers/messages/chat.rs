@@ -12,6 +12,11 @@ use teloxide::types::{ChatMemberUpdated, ParseMode};
 
 pub async fn handle_bot_added(bot: Bot, update: ChatMemberUpdated) -> Result<(), MyError> {
     let id = update.chat.id.to_string();
+
+    if !update.chat.is_chat() || !update.chat.is_group() || !update.chat.is_supergroup() {
+        return Ok(());
+    }
+
     info!("New chat added. ID: {}", id);
 
     let all_codes = get_all_currency_codes(CURRENCY_CONFIG_PATH.parse().unwrap())?;
