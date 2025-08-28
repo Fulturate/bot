@@ -29,6 +29,7 @@ pub fn inline_query_handler() -> Handler<
     teloxide::dispatching::DpHandlerDescription,
 > {
     dptree::entry().branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
+        //.branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
 }
 
 async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {

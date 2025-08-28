@@ -1,5 +1,5 @@
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{JsonConfig, read_json_config};
+use crate::util::json::{read_json_config, JsonConfig};
 use dotenv::dotenv;
 use std::sync::Arc;
 use teloxide::prelude::*;
@@ -7,6 +7,7 @@ use teloxide::prelude::*;
 #[derive(Clone)]
 pub struct Config {
     bot: Bot,
+    cobalt_client: ccobalt::Client,
     #[allow(dead_code)]
     owners: Vec<String>,
     version: String,
@@ -23,6 +24,12 @@ impl Config {
         let version = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION expected");
         let bot = Bot::new(bot_token);
 
+        let cobalt_client = ccobalt::Client::builder()
+            .base_url("https://cobalt-backend.canine.tools/")
+            .api_key("21212121-2121-2121-2121-212121212121") // todo: change api key
+            .build()
+            .expect("Failed to build cobalt client");
+
         let owners: Vec<String> = std::env::var("OWNERS")
             .expect("OWNERS expected")
             .split(',')
@@ -35,6 +42,7 @@ impl Config {
 
         Config {
             bot,
+            cobalt_client,
             owners,
             version,
             json_config,
@@ -45,6 +53,10 @@ impl Config {
 
     pub fn get_bot(&self) -> &Bot {
         &self.bot
+    }
+
+    pub fn get_cobalt_client(&self) -> &ccobalt::Client {
+        &self.cobalt_client
     }
 
     pub fn get_version(&self) -> &str {
