@@ -7,6 +7,7 @@ use std::path::Path;
 pub struct JsonConfig {
     pub ai_model: String,
     pub ai_prompt: String,
+    pub summarize_prompt: String,
 }
 
 impl JsonConfig {
@@ -16,6 +17,10 @@ impl JsonConfig {
 
     pub fn get_ai_prompt(&self) -> &str {
         &self.ai_prompt
+    }
+
+    pub fn get_summarize_prompt(&self) -> &str {
+        &self.summarize_prompt
     }
 }
 

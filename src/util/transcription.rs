@@ -9,7 +9,10 @@ use std::time::Duration;
 use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
-use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
+use teloxide::types::{
+    CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, MessageKind, ParseMode,
+    ReplyParameters,
+};
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot
@@ -20,6 +23,11 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .ok();
 
     let original_user_id = msg.from.clone().unwrap().id;
+
+    let keyboard = InlineKeyboardMarkup::new(vec![vec![
+        InlineKeyboardButton::callback("✨", "summarize"),
+        InlineKeyboardButton::callback("🗑️", format!("delete_{}", original_user_id.0))
+    ]]);
 
     if let Some(message) = message {
         if let Some(file) = get_file_id(&msg).await {
@@ -37,19 +45,19 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
-            .parse_mode(ParseMode::Html)
-            .reply_markup(delete_message_button(original_user_id.0))
-            .await?;
+                .parse_mode(ParseMode::Html)
+                .reply_markup(keyboard.clone())
+                .await?;
 
             for part in text_parts.iter().skip(1) {
                 bot.send_message(
                     msg.chat.id,
                     format!("<blockquote expandable>\n{}\n</blockquote>", part),
                 )
-                .reply_parameters(ReplyParameters::new(msg.id))
-                .parse_mode(ParseMode::Html)
-                .reply_markup(delete_message_button(original_user_id.0))
-                .await?;
+                    .reply_parameters(ReplyParameters::new(msg.id))
+                    .parse_mode(ParseMode::Html)
+                    .reply_markup(keyboard.clone())
+                    .await?;
             }
         } else {
             bot.edit_message_text(
@@ -57,13 +65,113 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 "Не удалось найти голосовое сообщение.",
             )
-            .parse_mode(ParseMode::Html)
-            // .reply_markup(delete_message_button())
-            .await?;
+                .parse_mode(ParseMode::Html)
+                .await?;
         }
     }
     Ok(())
 }
+
+pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Config) -> Result<(), MyError> {
+    if let Some(message) = query.message {
+        bot.answer_callback_query(query.id).await?;
+
+        let original_msg = if let Some(reply) = message.regular_message(){
+            reply.reply_to_message().unwrap()
+        } else {
+            bot.edit_message_text(
+                message.chat().id,
+                message.id(),
+                "Не удалось найти исходное сообщение для обработки.",
+            )
+                .await?;
+            return Ok(());
+        };
+
+        if let Some(audio_struct) = get_file_id(original_msg).await {
+            bot.edit_message_text(
+                message.chat().id,
+                message.id(),
+                "Составляю краткое содержание из аудио...",
+            )
+                .parse_mode(ParseMode::Html)
+                .await?;
+
+            let file_data = save_file_to_memory(&bot, &audio_struct.file_id).await?;
+
+            let summary_result = summarize_audio(
+                audio_struct.mime_type,
+                file_data,
+                config.clone(),
+            ).await;
+
+            match summary_result {
+                Ok(summary) => {
+                    let final_text = format!("Краткое содержание:\n<blockquote expandable>{}</blockquote>", summary);
+
+                    bot.edit_message_text(
+                        message.chat().id,
+                        message.id(),
+                        final_text
+                    )
+                        .parse_mode(ParseMode::Html)
+                        // .reply_markup(delete_message_button(original_user_id))
+                        .await?;
+                }
+                Err(e) => {
+                    error!("Error during summarization: {:?}", e);
+                    bot.edit_message_text(
+                        message.chat().id,
+                        message.id(),
+                        "❌ Ошибка при составлении краткого содержания.",
+                    )
+                        .reply_markup(message.regular_message().unwrap().reply_markup().cloned().unwrap())
+                        .await?;
+                }
+            }
+        } else {
+            bot.edit_message_text(
+                message.chat().id,
+                message.id(),
+                "Не удалось найти аудио в исходном сообщении.",
+            )
+                .await?;
+        }
+    }
+    Ok(())
+}
+
+async fn summarize_audio(mime_type: String, data: Bytes, config: Config) -> Result<String, MyError> {
+    let mut settings = gem_rs::types::Settings::new();
+    settings.set_all_safety_settings(HarmBlockThreshold::BlockNone);
+
+    let ai_model = config.get_json_config().get_ai_model().to_owned();
+    let prompt = config.get_json_config().get_summarize_prompt().to_owned();
+
+    let mut context = gem_rs::types::Context::new();
+    context.push_message(gem_rs::types::Role::Model, prompt);
+
+    let mut client = gem_rs::client::GemSession::Builder()
+        .model(gem_rs::api::Models::Custom(ai_model))
+        .timeout(Some(Duration::from_secs(120)))
+        .context(context)
+        .build();
+
+    let response = client
+        .send_blob(
+            gem_rs::types::Blob::new(&mime_type, &data),
+            gem_rs::types::Role::User,
+            &settings,
+        )
+        .await?;
+
+    Ok(response
+        .get_results()
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "Не удалось получить краткое содержание.".to_string()))
+}
+
 
 pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
     match &msg.kind {
