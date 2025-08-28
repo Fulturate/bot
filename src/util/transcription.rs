@@ -26,12 +26,21 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
 
     let keyboard = InlineKeyboardMarkup::new(vec![vec![
         InlineKeyboardButton::callback("✨", "summarize"),
-        InlineKeyboardButton::callback("🗑️", format!("delete_{}", original_user_id.0))
+        InlineKeyboardButton::callback("🗑️", format!("delete_{}", original_user_id.0)),
     ]]);
 
     if let Some(message) = message {
         if let Some(file) = get_file_id(&msg).await {
-            let file_data = save_file_to_memory(&bot, &file.file_id).await?;
+            let Ok(file_data) = save_file_to_memory(&bot, &file.file_id).await else {
+                bot.edit_message_text(
+                    msg.chat.id,
+                    message.id,
+                    "❌ Ошибка: Не удалось скачать файл. Возможно, он слишком большой (>20MB).",
+                )
+                .await?;
+                return Ok(());
+            };
+
             let transcription = Transcription {
                 mime_type: file.mime_type,
                 data: file_data,
@@ -45,19 +54,19 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
             )
-                .parse_mode(ParseMode::Html)
-                .reply_markup(keyboard.clone())
-                .await?;
+            .parse_mode(ParseMode::Html)
+            .reply_markup(keyboard.clone())
+            .await?;
 
             for part in text_parts.iter().skip(1) {
                 bot.send_message(
                     msg.chat.id,
                     format!("<blockquote expandable>\n{}\n</blockquote>", part),
                 )
-                    .reply_parameters(ReplyParameters::new(msg.id))
-                    .parse_mode(ParseMode::Html)
-                    .reply_markup(keyboard.clone())
-                    .await?;
+                .reply_parameters(ReplyParameters::new(msg.id))
+                .parse_mode(ParseMode::Html)
+                .reply_markup(keyboard.clone())
+                .await?;
             }
         } else {
             bot.edit_message_text(
@@ -65,18 +74,22 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                 message.id,
                 "Не удалось найти голосовое сообщение.",
             )
-                .parse_mode(ParseMode::Html)
-                .await?;
+            .parse_mode(ParseMode::Html)
+            .await?;
         }
     }
     Ok(())
 }
 
-pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Config) -> Result<(), MyError> {
+pub async fn summarization_handler(
+    bot: Bot,
+    query: CallbackQuery,
+    config: &Config,
+) -> Result<(), MyError> {
     if let Some(message) = query.message {
         bot.answer_callback_query(query.id).await?;
 
-        let original_msg = if let Some(reply) = message.regular_message(){
+        let original_msg = if let Some(reply) = message.regular_message() {
             reply.reply_to_message().unwrap()
         } else {
             bot.edit_message_text(
@@ -84,7 +97,7 @@ pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Conf
                 message.id(),
                 "Не удалось найти исходное сообщение для обработки.",
             )
-                .await?;
+            .await?;
             return Ok(());
         };
 
@@ -94,26 +107,22 @@ pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Conf
                 message.id(),
                 "Составляю краткое содержание из аудио...",
             )
-                .parse_mode(ParseMode::Html)
-                .await?;
+            .parse_mode(ParseMode::Html)
+            .await?;
 
             let file_data = save_file_to_memory(&bot, &audio_struct.file_id).await?;
 
-            let summary_result = summarize_audio(
-                audio_struct.mime_type,
-                file_data,
-                config.clone(),
-            ).await;
+            let summary_result =
+                summarize_audio(audio_struct.mime_type, file_data, config.clone()).await;
 
             match summary_result {
                 Ok(summary) => {
-                    let final_text = format!("Краткое содержание:\n<blockquote expandable>{}</blockquote>", summary);
+                    let final_text = format!(
+                        "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
+                        summary
+                    );
 
-                    bot.edit_message_text(
-                        message.chat().id,
-                        message.id(),
-                        final_text
-                    )
+                    bot.edit_message_text(message.chat().id, message.id(), final_text)
                         .parse_mode(ParseMode::Html)
                         // .reply_markup(delete_message_button(original_user_id))
                         .await?;
@@ -125,8 +134,15 @@ pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Conf
                         message.id(),
                         "❌ Ошибка при составлении краткого содержания.",
                     )
-                        .reply_markup(message.regular_message().unwrap().reply_markup().cloned().unwrap())
-                        .await?;
+                    .reply_markup(
+                        message
+                            .regular_message()
+                            .unwrap()
+                            .reply_markup()
+                            .cloned()
+                            .unwrap(),
+                    )
+                    .await?;
                 }
             }
         } else {
@@ -135,13 +151,17 @@ pub async fn summarization_handler(bot: Bot, query: CallbackQuery, config: &Conf
                 message.id(),
                 "Не удалось найти аудио в исходном сообщении.",
             )
-                .await?;
+            .await?;
         }
     }
     Ok(())
 }
 
-async fn summarize_audio(mime_type: String, data: Bytes, config: Config) -> Result<String, MyError> {
+async fn summarize_audio(
+    mime_type: String,
+    data: Bytes,
+    config: Config,
+) -> Result<String, MyError> {
     let mut settings = gem_rs::types::Settings::new();
     settings.set_all_safety_settings(HarmBlockThreshold::BlockNone);
 
@@ -171,7 +191,6 @@ async fn summarize_audio(mime_type: String, data: Bytes, config: Config) -> Resu
         .cloned()
         .unwrap_or_else(|| "Не удалось получить краткое содержание.".to_string()))
 }
-
 
 pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
     match &msg.kind {
