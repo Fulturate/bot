@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use mongodb::bson;
 use mongodb::bson::{doc, oid::ObjectId};
 use mongodb::results::UpdateResult;
-use oximod::Model;
 use oximod::_error::oximod_error::OxiModError;
+use oximod::Model;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Model)]
@@ -49,10 +49,6 @@ impl CurrenciesFunctions for Group {
 
     fn get_currencies(&self) -> &Vec<CurrencyStruct> {
         &self.convertable_currencies
-    }
-
-    fn id_field_name() -> &'static str {
-        "group_id"
     }
 
     async fn add_currency(
