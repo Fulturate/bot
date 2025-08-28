@@ -120,11 +120,27 @@ pub async fn currency_codes_list_handler(bot: Bot, msg: Message) -> Result<(), M
             .collect::<Vec<String>>()
             .join("\n");
 
-        message = format!(
-            // FIXME: is there any way to get all bot commands and then type /command_name without hardcoding?
-            "Available currencies to set up: <blockquote expandable>{}</blockquote>\n\nUsage: <code>/setcurrency CURRENCY_CODE</code> (e.g., <code>/setcurrency UAH</code>) to enable/disable it.\n\nNotes:\n✅ - enabled\n❌ - disabled",
-            codes_list
-        );
+        // safety: assume that bot commands always exists
+        let result = bot
+            .get_my_commands()
+            .await
+            .unwrap()
+            .iter()
+            .find_map(|command| (&command.command == "setcurrency").then(|| command.clone()));
+
+        if let Some(command) = result {
+            message = format!(
+                // FIXME: better hardcoding <3
+                "Available currencies to set up: <blockquote expandable>{}</blockquote>\n\nUsage: <code>/{} CURRENCY_CODE</code> (e.g., <code>/{} UAH</code>) to enable/disable it.\n\nNotes:\n✅ - enabled\n❌ - disabled",
+                codes_list, &command.command, &command.command
+            );
+        } else {
+            // default fallback
+            message = format!(
+                "Available currencies to set up: <blockquote expandable>{}</blockquote>\n\nNotes:\n✅ - enabled\n❌ - disabled",
+                codes_list
+            );
+        }
     }
 
     bot.send_message(msg.chat.id, message)
