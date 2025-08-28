@@ -9,11 +9,13 @@ use super::structs::WORD_VALUES;
 use crate::db::schemas::CurrenciesFunctions;
 use crate::db::schemas::group::Group;
 use crate::db::schemas::user::User;
+use log::{debug, error, warn};
 use once_cell::sync::Lazy;
 use oximod::Model;
 use regex::Regex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use teloxide::prelude::InlineQuery;
 use teloxide::types::Chat;
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -140,6 +142,10 @@ static COMPONENT_RE: Lazy<Regex> = Lazy::new(|| {
 });
 static INFIX_K_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(\d+(?:[.,]\d+)?)[kк](\d{1,3})$").unwrap());
+
+pub async fn is_currency_query(q: InlineQuery) -> bool {
+    CURRENCY_REGEX.is_match(&q.query)
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct DetectedCurrency {
@@ -313,8 +319,8 @@ impl CurrencyConverter {
                     }
                 } else {
                     // ???
-                    eprintln!(
-                        "[DEBUG] Skipped unknown API identifier from TonAPI: {}",
+                    debug!(
+                        "Skipped unknown API identifier from TonAPI: {}",
                         api_identifier
                     );
                 }
@@ -348,7 +354,7 @@ impl CurrencyConverter {
             tokio::join!(self.fetch_fiat_rates(), self.fetch_crypto_rates());
 
         let mut combined_rates = fiat_result.map_err(|e| {
-            eprintln!("CRITICAL: Failed to fetch vital fiat rates: {}", e);
+            error!("CRITICAL: Failed to fetch vital fiat rates: {}", e);
             e
         })?;
 
@@ -654,8 +660,8 @@ impl CurrencyConverter {
                         ));
                     }
                     Err(e) => {
-                        eprintln!(
-                            "Warning: Conversion error from {} to {}: {}. Skipping.",
+                        warn!(
+                            "Conversion error from {} to {}: {}. Skipping.",
                             original.currency_code, target_code, e
                         );
                     }
@@ -701,7 +707,7 @@ impl CurrencyConverter {
         for detected in detected_currencies {
             match self.format_conversion_result(&detected, &rates_data, &target_codes) {
                 Ok(formatted) => results.push(formatted),
-                Err(e) => eprintln!("Error formatting conversion for {:?}: {}", detected, e),
+                Err(e) => error!("Error formatting conversion for {:?}: {}", detected, e),
             }
         }
         Ok(results)
