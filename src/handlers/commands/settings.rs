@@ -6,6 +6,7 @@ use crate::{
     handlers::markups::currency_keyboard::get_all_currency_codes,
     util::{currency::converter::CURRENCY_CONFIG_PATH, errors::MyError},
 };
+use log::error;
 use oximod::Model;
 use std::collections::HashSet;
 use teloxide::prelude::*;
@@ -32,7 +33,7 @@ pub async fn handle_currency_update<T: BaseFunctions + CurrenciesFunctions + Mod
     let entity = match get_or_create::<T>(entity_id).await {
         Ok(e) => e,
         Err(e) => {
-            eprintln!("Failed to get or create entity: {:?}", e);
+            error!("Failed to get or create entity: {:?}", e);
             let message = "Error: Could not access settings. Try again".to_string();
             bot.send_message(msg.chat.id, message)
                 .reply_parameters(ReplyParameters::new(msg.id))
@@ -58,7 +59,7 @@ pub async fn handle_currency_update<T: BaseFunctions + CurrenciesFunctions + Mod
             )
         }
         Err(e) => {
-            eprintln!("--- Update failed: {:?} ---", e);
+            error!("--- Update failed: {:?} ---", e);
             "Failed to apply changes.".to_string()
         }
     };
@@ -89,15 +90,14 @@ async fn get_enabled_codes(msg: &Message) -> HashSet<String> {
                 .map(|c| c.code.clone())
                 .collect();
         }
-    } else {
-        if let Ok(Some(group)) = <Group as BaseFunctions>::find_by_id(chat_id).await {
-            return group
-                .get_currencies()
-                .iter()
-                .map(|c| c.code.clone())
-                .collect();
-        }
+    } else if let Ok(Some(group)) = <Group as BaseFunctions>::find_by_id(chat_id).await {
+        return group
+            .get_currencies()
+            .iter()
+            .map(|c| c.code.clone())
+            .collect();
     }
+
     HashSet::new()
 }
 

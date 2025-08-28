@@ -9,6 +9,7 @@ use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{Message, MessageKind, ParseMode, ReplyParameters};
+use log::{error, info};
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot
@@ -168,7 +169,7 @@ impl Transcription {
                         return split_text(full_text, 4000);
                     } else {
                         attempts += 1;
-                        eprintln!(
+                        info!(
                             "Received empty successful response from transcription service, attempt {}",
                             attempts
                         );
@@ -182,7 +183,7 @@ impl Transcription {
                     }
                     last_error = error.to_string();
 
-                    eprintln!(
+                    error!(
                         "Error with transcription (attempt {}): {:?}",
                         attempts, error
                     );
