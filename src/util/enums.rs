@@ -4,7 +4,7 @@ use teloxide::utils::command::BotCommands;
 #[command(rename_rule = "lowercase")]
 pub enum Command {
     #[command(description = "start command? :D")]
-    Start,
+    Start(String),
     #[command(description = "Speech recognition", alias = "sr")]
     SpeechRecognition,
     #[command(parse_with = "split", description = "Set currency to convert")]

@@ -17,7 +17,7 @@ pub(crate) async fn command_handlers(
     let config = Config::new().await;
     task::spawn(async move {
         match cmd {
-            Command::Start => start_handler(bot, message, &config).await,
+            Command::Start(arg) => start_handler(bot, message, &config, arg).await,
             Command::SpeechRecognition => speech_recognition_handler(bot, message, &config).await,
             Command::SetCurrency { code } => currency_codes_handler(bot, message, code).await,
             Command::ListCurrency => currency_codes_list_handler(bot, message).await,

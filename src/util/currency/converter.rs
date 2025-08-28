@@ -19,6 +19,7 @@ use teloxide::prelude::InlineQuery;
 use teloxide::types::Chat;
 use thiserror::Error;
 use tokio::sync::Mutex;
+use crate::util::errors::MyError;
 
 const CACHE_DURATION_SECS: u64 = 60 * 10;
 pub const CURRENCY_CONFIG_PATH: &str = "currencies.json";
@@ -160,6 +161,20 @@ pub fn get_all_currency_codes(config_file: String) -> Result<Vec<CurrencyStruct>
         .for_each(|currency| codes.push(currency.clone()));
 
     Ok(codes)
+}
+
+pub fn get_default_currencies() -> Result<Vec<CurrencyStruct>, MyError> {
+    let all_codes = get_all_currency_codes(CURRENCY_CONFIG_PATH.parse().unwrap())?;
+
+    let necessary_codes = all_codes
+        .iter()
+        .filter(|c| {
+            ["uah", "rub", "usd", "byn", "eur", "ton"].contains(&c.code.to_lowercase().as_str())
+        })
+        .cloned()
+        .collect::<Vec<CurrencyStruct>>();
+
+    Ok(necessary_codes)
 }
 
 #[derive(Debug, PartialEq, Clone)]

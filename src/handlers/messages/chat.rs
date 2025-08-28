@@ -1,8 +1,6 @@
 use crate::db::schemas::group::Group;
 use crate::db::schemas::user::User;
-use crate::util::currency::converter::{
-    CURRENCY_CONFIG_PATH, CurrencyStruct, get_all_currency_codes,
-};
+use crate::util::currency::converter::get_default_currencies;
 use crate::util::errors::MyError;
 use log::{error, info};
 use mongodb::bson::doc;
@@ -33,15 +31,7 @@ pub async fn handle_bot_added(bot: Bot, update: ChatMemberUpdated) -> Result<(),
 
     info!("New chat added. ID: {}", id);
 
-    let all_codes = get_all_currency_codes(CURRENCY_CONFIG_PATH.parse().unwrap())?;
-
-    let necessary_codes = all_codes
-        .iter()
-        .filter(|c| {
-            ["uah", "rub", "usd", "byn", "eur", "ton"].contains(&c.code.to_lowercase().as_str())
-        })
-        .cloned()
-        .collect::<Vec<CurrencyStruct>>();
+    let necessary_codes = get_default_currencies()?;
 
     let new_query = if update.chat.is_private() {
         User::new()
