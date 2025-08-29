@@ -8,9 +8,10 @@ use oximod::ModelTrait;
 use teloxide::Bot;
 use teloxide::payloads::SendMessageSetters;
 use teloxide::prelude::Requester;
-use teloxide::types::{ChatMemberUpdated, ParseMode};
+use teloxide::types::{ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, ParseMode};
+use crate::util::db::create_default_values;
 
-pub async fn handle_bot_added(bot: Bot, update: ChatMemberUpdated) -> Result<(), MyError> {
+pub async fn handle_bot_experience(bot: Bot, update: ChatMemberUpdated) -> Result<(), MyError> {
     let id = update.chat.id.to_string();
 
     if update.new_chat_member.is_banned() || update.new_chat_member.is_left() {
@@ -31,27 +32,17 @@ pub async fn handle_bot_added(bot: Bot, update: ChatMemberUpdated) -> Result<(),
 
     info!("New chat added. ID: {}", id);
 
-    let necessary_codes = get_default_currencies()?;
-
-    let new_query = if update.chat.is_private() {
-        User::new()
-            .user_id(id.clone())
-            .convertable_currencies(necessary_codes)
-            .save()
-            .await
-    } else {
-        Group::new()
-            .group_id(id.clone())
-            .convertable_currencies(necessary_codes)
-            .save()
-            .await
-    };
+    let new_query = create_default_values(id.clone(), update.chat.is_private()).await;
 
     match new_query {
         Ok(_) => {
-            // todo: welcome message
-            bot.send_message(update.chat.id, "Hello world".to_string())
+            // todo: finish welcome message
+            let news_link_button = InlineKeyboardButton::url("Канал с новостями о Боте", "https://t.me/fulturate".parse().unwrap());
+            let github_link_button = InlineKeyboardButton::url("Github", "https://github.com/Fulturate/bot".parse().unwrap());
+
+            bot.send_message(update.chat.id, "Добро пожаловать в Fulturate!\n\n<i>Мы тут когда нибудь что-то точно сделаем...</i>".to_string())
                 .parse_mode(ParseMode::Html)
+                .reply_markup(InlineKeyboardMarkup::new(vec![vec![news_link_button, github_link_button]]))
                 .await?;
         }
         Err(e) => {

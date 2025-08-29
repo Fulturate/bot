@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     handlers::{
         commander::command_handlers, markups::markuper::callback_query_handlers,
-        messages::chat::handle_bot_added,
+        messages::chat::handle_bot_experience,
     },
     util::{enums::Command, errors::MyError},
 };
@@ -50,7 +50,7 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
                 .branch(Message::filter_voice().endpoint(handle_speech)),
         )
         .branch(Update::filter_callback_query().endpoint(callback_query_handlers))
-        .branch(Update::filter_my_chat_member().endpoint(handle_bot_added))
+        .branch(Update::filter_my_chat_member().endpoint(handle_bot_experience))
         .branch(Update::filter_inline_query().branch(inline_query_handler()));
 
     let bot = config.get_bot().clone();
