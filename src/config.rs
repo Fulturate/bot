@@ -1,6 +1,8 @@
+use crate::db::redis::RedisCache;
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{read_json_config, JsonConfig};
+use crate::util::json::{JsonConfig, read_json_config};
 use dotenv::dotenv;
+use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
 
@@ -14,6 +16,7 @@ pub struct Config {
     json_config: JsonConfig,
     currency_converter: Arc<CurrencyConverter>,
     mongodb_url: String,
+    redis_client: RedisCache,
 }
 
 impl Config {
@@ -40,6 +43,11 @@ impl Config {
         let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
         let mongodb_url = std::env::var("MONGODB_URL").expect("MONGODB_URL expected");
 
+        let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL expected");
+        let redis_client = RedisClient::open(redis_url).expect("Failed to open Redis client");
+
+        let redis_client = RedisCache::new(redis_client);
+
         Config {
             bot,
             cobalt_client,
@@ -47,7 +55,8 @@ impl Config {
             version,
             json_config,
             currency_converter,
-            mongodb_url
+            mongodb_url,
+            redis_client,
         }
     }
 
@@ -75,6 +84,12 @@ impl Config {
     pub fn get_currency_converter(&self) -> &CurrencyConverter {
         &self.currency_converter
     }
-    
-    pub fn get_mongodb_url(&self) -> &str { &self.mongodb_url }
+
+    pub fn get_mongodb_url(&self) -> &str {
+        &self.mongodb_url
+    }
+
+    pub fn get_redis_client(&self) -> &RedisCache {
+        &self.redis_client
+    }
 }
