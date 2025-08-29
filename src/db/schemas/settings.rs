@@ -71,10 +71,6 @@ impl SettingsRepo for Settings {
         }
     }
 
-    fn modules(&self) -> &Vec<ModuleSettings> {
-        &self.modules
-    }
-
     fn modules_mut(&mut self) -> &mut Vec<ModuleSettings> {
         &mut self.modules
     }

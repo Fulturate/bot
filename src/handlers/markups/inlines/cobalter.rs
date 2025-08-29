@@ -2,22 +2,19 @@ use crate::config::Config;
 use ccobalt::model::request::{DownloadRequest, VideoQuality};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::error as error_handler;
-use std::str::FromStr;
 use std::sync::Arc;
 use teloxide::Bot;
-use teloxide::payloads::{AnswerInlineQuery, AnswerInlineQuerySetters, SendVideoSetters};
 use teloxide::prelude::{Request, Requester};
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
-    InlineQueryResultArticle, InlineQueryResultsButton, InputMessageContent,
+    InlineQueryResultArticle, InputMessageContent,
     InputMessageContentText,
 };
+use crate::util::errors::MyError;
 
 static URL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(https?)://[^\s/$.?#].[^\s]*$").unwrap());
 
-#[allow(dead_code)]
 fn is_url(text: &str) -> bool {
     URL_REGEX.is_match(text)
 }
@@ -26,15 +23,11 @@ pub async fn is_query_url(inline_query: InlineQuery) -> bool {
     URL_REGEX.is_match(&inline_query.query)
 }
 
-fn url_to_reqwest_url(url: String) -> reqwest::Url {
-    reqwest::Url::from_str(&url).unwrap()
-}
-
 pub async fn handle_cobalt_inline(
     bot: Bot,
     q: InlineQuery,
     config: Arc<Config>,
-) -> Result<(), Box<dyn error_handler::Error + Send + Sync>> {
+) -> Result<(), MyError> {
     let url = &q.query;
     if is_url(url) {
         let request = DownloadRequest {
@@ -46,7 +39,7 @@ pub async fn handle_cobalt_inline(
         let cobalt_client = config.get_cobalt_client();
 
         match cobalt_client.download_and_save(&request, "test", ".").await {
-            Ok(video_file) => {
+            Ok(_video_file) => {
                 let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::url(
                     "🔗 Open Link".to_string(),
                     url.parse()?,
@@ -72,7 +65,6 @@ pub async fn handle_cobalt_inline(
             }
         }
     } else {
-        // Not a supported URL, optionally handle or ignore
         Ok(())
     }
 }

@@ -1,17 +1,17 @@
 use crate::config::Config;
-use crate::util::{errors::MyError, transcription::transcription_handler};
+use crate::util::errors::MyError;
 use teloxide::prelude::*;
 use teloxide::types::{ParseMode, ReplyParameters, User};
 use translators::{GoogleTranslator, Translator};
 
 pub async fn translate_handler(
     bot: Bot,
-    msg: Message,
+    msg: &Message,
     config: &Config,
     arg: String,
 ) -> Result<(), MyError> {
     let text_to_translate = msg.reply_to_message().unwrap().text().unwrap();
-    let user = msg.from().unwrap();
+    let user = &msg.from.clone().unwrap();
 
     if msg.reply_to_message().is_some() {
         let target_lang = if arg.trim().is_empty() {

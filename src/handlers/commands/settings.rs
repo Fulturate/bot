@@ -162,7 +162,7 @@ pub async fn settings_command_handler(
     message: Message,
     _config: &Config,
 ) -> Result<(), MyError> {
-    let owner_id: String = if let Some(user) = message.from() {
+    let owner_id: String = if let Some(user) = message.from {
         user.id.to_string()
     } else {
         message.chat.id.to_string()

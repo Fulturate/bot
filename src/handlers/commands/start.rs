@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::db::schemas::user::User;
 use crate::util::currency::converter::get_default_currencies;
 use crate::util::errors::MyError;
-use log::{error, info};
+use log::error;
 use mongodb::bson::doc;
 use oximod::Model;
 use std::time::Instant;
@@ -14,7 +14,7 @@ pub async fn start_handler(
     bot: Bot,
     message: Message,
     config: &Config,
-    arg: String,
+    _arg: String,
 ) -> Result<(), MyError> {
     if message.chat.is_private() {
         let user = message.from.clone().unwrap();

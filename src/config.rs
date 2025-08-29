@@ -24,12 +24,13 @@ impl Config {
         dotenv().ok();
 
         let bot_token = std::env::var("BOT_TOKEN").expect("BOT_TOKEN expected");
+        let cobalt_api_key = std::env::var("COBALT_API_KEY").expect("COBALT_API_KEY expected");
         let version = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION expected");
         let bot = Bot::new(bot_token);
 
         let cobalt_client = ccobalt::Client::builder()
             .base_url("https://cobalt-backend.canine.tools/")
-            .api_key("21212121-2121-2121-2121-212121212121") // todo: change api key
+            .api_key(cobalt_api_key)
             .build()
             .expect("Failed to build cobalt client");
 

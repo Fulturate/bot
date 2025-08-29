@@ -30,7 +30,5 @@ pub trait SettingsRepo {
     where
         Self: Sized;
 
-    fn modules(&self) -> &Vec<ModuleSettings>;
-
     fn modules_mut(&mut self) -> &mut Vec<ModuleSettings>;
 }
