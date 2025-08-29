@@ -1,14 +1,18 @@
 use crate::config::Config;
+use ccobalt::model::request::{DownloadRequest, VideoQuality};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::error as error_handler;
 use std::str::FromStr;
 use std::sync::Arc;
-use ccobalt::model::request::{DownloadRequest, VideoQuality};
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult, InlineQueryResultArticle, InlineQueryResultsButton, InputMessageContent, InputMessageContentText};
 use teloxide::Bot;
 use teloxide::payloads::{AnswerInlineQuery, AnswerInlineQuerySetters, SendVideoSetters};
 use teloxide::prelude::{Request, Requester};
+use teloxide::types::{
+    InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+    InlineQueryResultArticle, InlineQueryResultsButton, InputMessageContent,
+    InputMessageContentText,
+};
 
 static URL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(https?)://[^\s/$.?#].[^\s]*$").unwrap());
@@ -51,9 +55,7 @@ pub async fn handle_cobalt_inline(
                 let article = InlineQueryResultArticle::new(
                     "cobalt_prompt",
                     "Cobalt Test",
-                    InputMessageContent::Text(InputMessageContentText::new(
-                        "Test",
-                    )),
+                    InputMessageContent::Text(InputMessageContentText::new("Test")),
                 )
                 .description("Teestttt 22")
                 .reply_markup(keyboard);

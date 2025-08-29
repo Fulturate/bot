@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::db::schemas::user::User;
+use crate::util::errors::MyError;
 use log::{debug, error};
 use mongodb::bson::doc;
 use oximod::Model;
-use std::error as error_handler;
 use std::sync::Arc;
 use teloxide::Bot;
 use teloxide::payloads::AnswerInlineQuerySetters;
@@ -20,7 +20,7 @@ pub async fn handle_currency_inline(
     q: InlineQuery,
     config: Arc<Config>,
     me: Me,
-) -> Result<(), Box<dyn error_handler::Error + Send + Sync>> {
+) -> Result<(), MyError> {
     let user_id_str = q.from.id.to_string();
 
     let user_exists = User::find_one(doc! { "user_id": &user_id_str })
