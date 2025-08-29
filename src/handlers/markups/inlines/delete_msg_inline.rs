@@ -1,3 +1,4 @@
+use log::error;
 use crate::util::errors::MyError;
 use crate::util::inline::DELETE_CALLBACK_DATA;
 use teloxide::Bot;
@@ -54,7 +55,7 @@ pub async fn delete_msg_handler(bot: Bot, q: CallbackQuery) -> Result<(), MyErro
         return match bot.delete_message(chat_id, message_id).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                eprintln!("Failed to delete message: {:?}", e);
+                error!("Failed to delete message: {:?}", e);
                 bot.answer_callback_query(q.id)
                         .text("❌ Не удалось удалить сообщение (возможно, у меня нет прав или сообщение слишком старое).")
                         .show_alert(true)

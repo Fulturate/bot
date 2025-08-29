@@ -1,2 +1,2 @@
-mod inlines;
+pub mod inlines;
 pub mod markuper;
