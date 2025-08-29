@@ -18,4 +18,5 @@ pub enum Command {
 pub struct AudioStruct {
     pub mime_type: String,
     pub file_id: String,
+    pub file_unique_id: String,
 }

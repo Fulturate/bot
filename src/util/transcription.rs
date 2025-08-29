@@ -1,18 +1,73 @@
 use super::enums::AudioStruct;
 use crate::config::Config;
 use crate::util::errors::MyError;
-use crate::util::inline::delete_message_button;
 use bytes::Bytes;
 use gem_rs::types::HarmBlockThreshold;
-use log::{error, info};
+use log::{debug, error, info};
+use redis_macros::{FromRedisValue, ToRedisArgs};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use teloxide::Bot;
-use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
+use teloxide::payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{
     CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, MessageKind, ParseMode,
     ReplyParameters,
 };
+
+#[derive(Debug, Serialize, Deserialize, FromRedisValue, ToRedisArgs, Clone)]
+struct TranscriptionCache {
+    full_text: String,
+    summary: Option<String>,
+    file_id: String,
+    mime_type: String,
+}
+
+async fn get_cached(
+    bot: &Bot,
+    file: &AudioStruct,
+    config: &Config,
+) -> Result<TranscriptionCache, MyError> {
+    let cache = config.get_redis_client();
+    let file_cache_key = format!("transcription_by_file:{}", &file.file_unique_id);
+
+    if let Some(cached_text) = cache.get::<TranscriptionCache>(&file_cache_key).await? {
+        debug!("File cache HIT for unique_id: {}", &file.file_unique_id);
+        return Ok(cached_text);
+    }
+
+    let file_data = save_file_to_memory(bot, &file.file_id).await?;
+
+    let transcription = Transcription {
+        mime_type: file.mime_type.to_string(),
+        data: file_data,
+        config: config.clone(),
+    };
+    let processed_parts = transcription.to_text().await;
+
+    if processed_parts.is_empty() || processed_parts[0].contains("Не удалось преобразовать")
+    {
+        let error_message = processed_parts.get(0).cloned().unwrap_or_default();
+        return Err(MyError::Other(error_message));
+    }
+
+    let full_text = processed_parts.join("\n\n");
+
+    let new_cache_entry = TranscriptionCache {
+        full_text,
+        summary: None,
+        file_id: file.file_id.clone(),
+        mime_type: file.mime_type.clone(),
+    };
+
+    cache.set(&file_cache_key, &new_cache_entry, 86400).await?;
+    debug!(
+        "Saved new transcription to file cache for unique_id: {}",
+        file.file_id
+    );
+
+    Ok(new_cache_entry)
+}
 
 pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {
     let message = bot
@@ -22,62 +77,122 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .await
         .ok();
 
-    let original_user_id = msg.from.clone().unwrap().id;
+    let Some(message) = message else {
+        return Ok(());
+    };
 
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback("✨", "summarize"),
-        InlineKeyboardButton::callback("🗑️", format!("delete_{}", original_user_id.0)),
-    ]]);
+    if let Some(file) = get_file_id(&msg).await {
+        match get_cached(&bot, &file, config).await {
+            Ok(cache_entry) => {
+                let cache = config.get_redis_client();
 
-    if let Some(message) = message {
-        if let Some(file) = get_file_id(&msg).await {
-            let Ok(file_data) = save_file_to_memory(&bot, &file.file_id).await else {
+                let message_file_map_key = format!("message_file_map:{}", message.id);
+                cache
+                    .set(&message_file_map_key, &file.file_unique_id, 3600)
+                    .await?;
+
+                let text_parts = split_text(cache_entry.full_text, 4000);
+
+                let keyboard = InlineKeyboardMarkup::new(vec![vec![
+                    InlineKeyboardButton::callback("✨", "summarize"),
+                    InlineKeyboardButton::callback(
+                        "🗑️",
+                        format!("delete_{}", msg.from.unwrap().id.0),
+                    ),
+                ]]);
+
                 bot.edit_message_text(
                     msg.chat.id,
                     message.id,
-                    "❌ Ошибка: Не удалось скачать файл. Возможно, он слишком большой (>20MB).",
+                    format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
                 )
-                .await?;
-                return Ok(());
-            };
-
-            let transcription = Transcription {
-                mime_type: file.mime_type,
-                data: file_data,
-                config: config.clone(),
-            };
-
-            let text_parts = transcription.to_text().await;
-
-            bot.edit_message_text(
-                msg.chat.id,
-                message.id,
-                format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
-            )
-            .parse_mode(ParseMode::Html)
-            .reply_markup(keyboard.clone())
-            .await?;
-
-            for part in text_parts.iter().skip(1) {
-                bot.send_message(
-                    msg.chat.id,
-                    format!("<blockquote expandable>\n{}\n</blockquote>", part),
-                )
-                .reply_parameters(ReplyParameters::new(msg.id))
                 .parse_mode(ParseMode::Html)
                 .reply_markup(keyboard.clone())
                 .await?;
+
+                for part in text_parts.iter().skip(1) {
+                    bot.send_message(
+                        msg.chat.id,
+                        format!("<blockquote expandable>\n{}\n</blockquote>", part),
+                    )
+                    .reply_parameters(ReplyParameters::new(msg.id))
+                    .parse_mode(ParseMode::Html)
+                    .reply_markup(keyboard.clone())
+                    .await?;
+                }
             }
-        } else {
-            bot.edit_message_text(
-                msg.chat.id,
-                message.id,
-                "Не удалось найти голосовое сообщение.",
-            )
-            .parse_mode(ParseMode::Html)
-            .await?;
+            Err(e) => {
+                error!("Failed to get transcription: {:?}", e);
+                let error_text = match e {
+                    MyError::Other(msg) if msg.contains("Не удалось преобразовать") => {
+                        msg
+                    }
+                    MyError::Reqwest(_) => {
+                        "❌ Ошибка: Не удалось скачать файл. Возможно, он слишком большой (>20MB)."
+                            .to_string()
+                    }
+                    _ => "❌ Произошла неизвестная ошибка при обработке аудио.".to_string(),
+                };
+                bot.edit_message_text(message.chat.id, message.id, error_text)
+                    .await?;
+            }
         }
+    } else {
+        bot.edit_message_text(
+            message.chat.id,
+            message.id,
+            "Не удалось найти голосовое сообщение.",
+        )
+        .parse_mode(ParseMode::Html)
+        .await?;
     }
+    Ok(())
+}
+
+pub async fn back_handler(bot: Bot, query: CallbackQuery, config: &Config) -> Result<(), MyError> {
+    let Some(message) = query.message else {
+        return Ok(());
+    };
+    bot.answer_callback_query(query.id).await?;
+
+    let cache = config.get_redis_client();
+    let message_cache_key = format!("message_file_map:{}", message.id());
+
+    let Some(file_unique_id) = cache.get::<String>(&message_cache_key).await? else {
+        bot.edit_message_text(
+            message.chat().id,
+            message.id(),
+            "❌ Не удалось найти исходное сообщение.",
+        )
+        .await?;
+        return Ok(());
+    };
+
+    let file_cache_key = format!("transcription_by_file:{}", file_unique_id);
+    let Some(cache_entry) = cache.get::<TranscriptionCache>(&file_cache_key).await? else {
+        bot.edit_message_text(
+            message.chat().id,
+            message.id(),
+            "❌ Не удалось найти исходный текст в кеше.",
+        )
+        .await?;
+        return Ok(());
+    };
+
+    let text_parts = split_text(cache_entry.full_text, 4000);
+
+    bot.edit_message_text(
+        message.chat().id,
+        message.id(),
+        format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
+    )
+    .parse_mode(ParseMode::Html)
+    .reply_markup(InlineKeyboardMarkup::new(vec![vec![
+        InlineKeyboardButton::callback("✨", "summarize"),
+        InlineKeyboardButton::callback("🗑️", format!("delete_{}", query.from.id.0)),
+    ]]))
+    .await?;
+
     Ok(())
 }
 
@@ -86,74 +201,104 @@ pub async fn summarization_handler(
     query: CallbackQuery,
     config: &Config,
 ) -> Result<(), MyError> {
-    if let Some(message) = query.message {
-        bot.answer_callback_query(query.id).await?;
+    let Some(message) = query.message else {
+        return Ok(());
+    };
 
-        let original_msg = if let Some(reply) = message.regular_message() {
-            reply.reply_to_message().unwrap()
-        } else {
+    let Some(message) = message.regular_message() else {
+        return Ok(());
+    };
+
+    bot.answer_callback_query(query.id).await?;
+
+    let cache = config.get_redis_client();
+
+    let message_file_map_key = format!("message_file_map:{}", message.id);
+    let Some(file_unique_id) = cache.get::<String>(&message_file_map_key).await? else {
+        bot.edit_message_text(
+            message.chat.id,
+            message.id,
+            "❌ Не удалось обработать запрос. Кнопка устарела.",
+        )
+        .await?;
+
+        return Ok(());
+    };
+
+    let file_cache_key = format!("transcription_by_file:{}", file_unique_id);
+
+    let mut cache_entry = match cache.get::<TranscriptionCache>(&file_cache_key).await? {
+        Some(entry) => entry,
+        None => {
             bot.edit_message_text(
-                message.chat().id,
-                message.id(),
-                "Не удалось найти исходное сообщение для обработки.",
+                message.chat.id,
+                message.id,
+                "❌ Не удалось найти исходное аудио.",
             )
             .await?;
+
             return Ok(());
-        };
-
-        if let Some(audio_struct) = get_file_id(original_msg).await {
-            bot.edit_message_text(
-                message.chat().id,
-                message.id(),
-                "Составляю краткое содержание из аудио...",
-            )
-            .parse_mode(ParseMode::Html)
-            .await?;
-
-            let file_data = save_file_to_memory(&bot, &audio_struct.file_id).await?;
-
-            let summary_result =
-                summarize_audio(audio_struct.mime_type, file_data, config.clone()).await;
-
-            match summary_result {
-                Ok(summary) => {
-                    let final_text = format!(
-                        "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
-                        summary
-                    );
-
-                    bot.edit_message_text(message.chat().id, message.id(), final_text)
-                        .parse_mode(ParseMode::Html)
-                        // .reply_markup(delete_message_button(original_user_id))
-                        .await?;
-                }
-                Err(e) => {
-                    error!("Error during summarization: {:?}", e);
-                    bot.edit_message_text(
-                        message.chat().id,
-                        message.id(),
-                        "❌ Ошибка при составлении краткого содержания.",
-                    )
-                    .reply_markup(
-                        message
-                            .regular_message()
-                            .unwrap()
-                            .reply_markup()
-                            .cloned()
-                            .unwrap(),
-                    )
-                    .await?;
-                }
-            }
-        } else {
-            bot.edit_message_text(
-                message.chat().id,
-                message.id(),
-                "Не удалось найти аудио в исходном сообщении.",
-            )
-            .await?;
         }
+    };
+
+    if let Some(cached_summary) = cache_entry.summary {
+        let final_text = format!(
+            "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
+            cached_summary
+        );
+
+        let back_keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+            "⬅️ Назад",
+            "back_to_full",
+        )]]);
+
+        bot.edit_message_text(message.chat.id, message.id, final_text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(back_keyboard)
+            .await?;
+
+        return Ok(());
     }
+
+    bot.edit_message_text(
+        message.chat.id,
+        message.id,
+        "Составляю краткое содержание...",
+    )
+    .await?;
+
+    let file_data = save_file_to_memory(&bot, &cache_entry.file_id).await?;
+    let new_summary =
+        summarize_audio(cache_entry.mime_type.clone(), file_data, config.clone()).await?;
+
+    if new_summary.is_empty() || new_summary.contains("Не удалось получить") {
+        bot.edit_message_text(
+            message.chat.id,
+            message.id,
+            "❌ Не удалось составить краткое содержание.",
+        )
+        .await?;
+        return Ok(());
+    }
+
+    cache_entry.summary = Some(new_summary.clone());
+    cache.set(&file_cache_key, &cache_entry, 86400).await?;
+
+    let final_text = format!(
+        "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
+        new_summary
+    );
+
+    let back_keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        "⬅️ Назад",
+        "back_to_full",
+    )]]);
+
+    bot.edit_message_text(message.chat.id, message.id, final_text)
+        .parse_mode(ParseMode::Html)
+        .reply_markup(back_keyboard)
+        .await?;
+
     Ok(())
 }
 
@@ -204,6 +349,7 @@ pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
                     .essence_str()
                     .to_owned(),
                 file_id: audio.audio.file.id.0.to_string(),
+                file_unique_id: audio.audio.file.unique_id.0.to_string(),
             }),
             teloxide::types::MediaKind::Voice(voice) => Some(AudioStruct {
                 mime_type: voice
@@ -214,10 +360,12 @@ pub async fn get_file_id(msg: &Message) -> Option<AudioStruct> {
                     .essence_str()
                     .to_owned(),
                 file_id: voice.voice.file.id.0.to_owned(),
+                file_unique_id: voice.voice.file.unique_id.0.to_owned(),
             }),
             teloxide::types::MediaKind::VideoNote(video_note) => Some(AudioStruct {
                 mime_type: "video/mp4".to_owned(),
                 file_id: video_note.video_note.file.id.0.to_owned(),
+                file_unique_id: video_note.video_note.file.unique_id.0.to_owned(),
             }),
             _ => None,
         },
@@ -330,4 +478,59 @@ fn split_text(text: String, chunk_size: usize) -> Vec<String> {
         .chunks(chunk_size)
         .map(|chunk| chunk.iter().collect())
         .collect()
+}
+
+pub async fn delete_transcription_handler(bot: Bot, query: CallbackQuery) -> Result<(), MyError> {
+    let Some(message_to_delete) = query.message else {
+        return Ok(());
+    };
+
+    let Some(message) = message_to_delete.regular_message() else {
+        return Ok(());
+    };
+
+    let Some(data) = query.data else {
+        return Ok(());
+    };
+    let clicker = query.from;
+
+    let target_user_id_str = data.strip_prefix("delete_").unwrap_or_default();
+    let Ok(target_user_id) = target_user_id_str.parse::<u64>() else {
+        bot.answer_callback_query(query.id)
+            .text("❌ Ошибка: неверный ID в кнопке.")
+            .show_alert(true)
+            .await?;
+        return Ok(());
+    };
+
+    let mut has_permission = false;
+
+    if clicker.id.0 == target_user_id {
+        has_permission = true;
+    }
+
+    if !has_permission && message.chat.is_group() || message.chat.is_supergroup() {
+        if let Ok(member) = bot.get_chat_member(message.chat.id, clicker.id).await {
+            if member.is_privileged() {
+                has_permission = true;
+            }
+        }
+    }
+
+    if !has_permission {
+        bot.answer_callback_query(query.id)
+            .text("❌ Удалить может только автор сообщения или администратор.")
+            .show_alert(true)
+            .await?;
+        return Ok(());
+    }
+
+    bot.answer_callback_query(query.id).await?;
+
+    bot.delete_message(message.chat.id, message.id)
+        .await
+        .map_err(|e| error!("Failed to delete bot's message: {:?}", e))
+        .ok();
+
+    Ok(())
 }
