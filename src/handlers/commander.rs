@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::handlers::commands::{
-    settings::{currency_codes_handler, currency_codes_list_handler},
+    settings::{currency_codes_handler, currency_codes_list_handler, settings_command_handler},
     speech_recognition::speech_recognition_handler,
     start::start_handler,
 };
@@ -23,6 +23,7 @@ pub(crate) async fn command_handlers(
             Command::SpeechRecognition => speech_recognition_handler(bot, message, &config).await,
             Command::SetCurrency { code } => currency_codes_handler(bot, message, code).await,
             Command::ListCurrency => currency_codes_list_handler(bot, message).await,
+            Command::Settings => settings_command_handler(bot, message, &config).await,
         }
     });
     Ok(())

@@ -31,11 +31,13 @@ pub enum MyError {
     #[error("Application Error: {0}")]
     Other(String),
 }
+
 impl From<&str> for MyError {
     fn from(s: &str) -> Self {
         MyError::Other(s.to_string())
     }
 }
+
 impl From<String> for MyError {
     fn from(s: String) -> Self {
         MyError::Other(s)

@@ -1,10 +1,12 @@
-use crate::db::schemas::{BaseFunctions, CurrenciesFunctions};
+use crate::config::Config;
+use crate::db::schemas::settings::Settings;
+use crate::db::schemas::{BaseFunctions, CurrenciesFunctions, SettingsRepo};
 use crate::{
     db::functions::get_or_create,
     db::schemas::group::Group,
     db::schemas::user::User,
     util::{
-        currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes},
+        currency::converter::{get_all_currency_codes, CURRENCY_CONFIG_PATH},
         errors::MyError,
     },
 };
@@ -12,7 +14,7 @@ use log::error;
 use oximod::Model;
 use std::collections::HashSet;
 use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters};
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage, ParseMode, ReplyParameters};
 
 pub async fn handle_currency_update<T: BaseFunctions + CurrenciesFunctions + Model>(
     bot: Bot,
@@ -149,6 +151,75 @@ pub async fn currency_codes_list_handler(bot: Bot, msg: Message) -> Result<(), M
         .parse_mode(ParseMode::Html)
         .reply_parameters(ReplyParameters::new(msg.id))
         .await?;
+
+    Ok(())
+}
+
+
+// new settings
+pub async fn settings_command_handler(
+    bot: Bot,
+    message: Message,
+    _config: &Config,
+) -> Result<(), MyError> {
+    let owner_id: String = if let Some(user) = message.from() {
+        user.id.to_string()
+    } else {
+        message.chat.id.to_string()
+    };
+
+    let owner_type = if message.chat.is_private() { "user" } else { "group" };
+
+    let settings = Settings::get_or_create(&owner_id, &owner_type).await?;
+
+    let keyboard = InlineKeyboardMarkup::new(
+        settings
+            .modules
+            .iter()
+            .map(|m| {
+                let status = if m.enabled { "✅" } else { "❌" };
+                let text = format!("{status} {}", m.description);
+                let callback_data = format!("module_select:{owner_type}:{owner_id}:{}", m.key);
+                vec![InlineKeyboardButton::callback(text, callback_data)]
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    bot.send_message(message.chat.id, "Настройки модулей:")
+        .reply_markup(keyboard)
+        .await?;
+
+    Ok(())
+}
+
+pub async fn update_settings_message(
+    bot: Bot,
+    message: MaybeInaccessibleMessage,
+    owner_id: String,
+    owner_type: String,
+) -> Result<(), MyError> {
+    let settings = Settings::get_or_create(&owner_id, &owner_type).await?;
+
+    let keyboard = InlineKeyboardMarkup::new(
+        settings
+            .modules
+            .iter()
+            .map(|m| {
+                let status = if m.enabled { "✅" } else { "❌" };
+                let text = format!("{status} {}", m.description);
+                let callback_data = format!("module_select:{owner_type}:{owner_id}:{}", m.key);
+                vec![InlineKeyboardButton::callback(text, callback_data)]
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    let text = "Настройки модулей:";
+
+    if let MaybeInaccessibleMessage::Regular(msg) = message {
+        let _ = bot.edit_message_text(msg.chat.id, msg.id, text)
+            .reply_markup(keyboard)
+            .await;
+    }
 
     Ok(())
 }

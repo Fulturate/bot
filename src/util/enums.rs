@@ -13,6 +13,8 @@ pub enum Command {
     SetCurrency { code: String },
     #[command(description = "List of available currencies to convert")]
     ListCurrency,
+    #[command(description = "Settings of bot")]
+    Settings,
 }
 
 pub struct AudioStruct {
