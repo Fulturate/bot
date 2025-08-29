@@ -25,7 +25,7 @@ use teloxide::{
 
 pub fn inline_query_handler() -> Handler<
     'static,
-    Result<(), Box<dyn std::error::Error + Send + Sync>>,
+    Result<(), MyError>,
     teloxide::dispatching::DpHandlerDescription,
 > {
     dptree::entry().branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
