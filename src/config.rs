@@ -39,7 +39,7 @@ impl Config {
             version,
             json_config,
             currency_converter,
-            mongodb_url
+            mongodb_url,
         }
     }
 
@@ -63,6 +63,8 @@ impl Config {
     pub fn get_currency_converter(&self) -> &CurrencyConverter {
         &self.currency_converter
     }
-    
-    pub fn get_mongodb_url(&self) -> &str { &self.mongodb_url }
+
+    pub fn get_mongodb_url(&self) -> &str {
+        &self.mongodb_url
+    }
 }
