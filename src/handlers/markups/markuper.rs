@@ -7,6 +7,7 @@ use teloxide::Bot;
 use teloxide::requests::Requester;
 use teloxide::types::CallbackQuery;
 use crate::handlers::markups::callbacks::module::{module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler};
+use crate::handlers::markups::callbacks::translate::handle_translate_callback;
 use crate::handlers::markups::callbacks::whisper::handle_whisper_callback;
 
 pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
@@ -32,6 +33,8 @@ pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Resul
             settings_back_handler(bot, qq).await?
         } else if data.starts_with("whisper") {
             handle_whisper_callback(bot, qq, &_config).await?
+        } else if data.starts_with("tr_") {
+            handle_translate_callback(bot, qq, &_config).await?
         } else {
             bot.answer_callback_query(qq.id).await.unwrap();
         }
