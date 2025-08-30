@@ -6,7 +6,8 @@ use crate::util::transcription::{
 use teloxide::Bot;
 use teloxide::requests::Requester;
 use teloxide::types::CallbackQuery;
-use crate::handlers::markups::markups::module::{module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler};
+use crate::handlers::markups::callbacks::module::{module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler};
+use crate::handlers::markups::callbacks::whisper::handle_whisper_callback;
 
 pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let _config = Config::new().await;
@@ -29,6 +30,8 @@ pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Resul
             module_option_handler(bot, qq).await?
         } else if data.starts_with("settings_back:") {
             settings_back_handler(bot, qq).await?
+        } else if data.starts_with("whisper") {
+            handle_whisper_callback(bot, qq, &_config).await?
         } else {
             bot.answer_callback_query(qq.id).await.unwrap();
         }

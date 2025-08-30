@@ -23,14 +23,17 @@ use teloxide::{
     utils::command::BotCommands,
 };
 use crate::handlers::markups::inlines::cobalter::{handle_cobalt_inline, is_query_url};
+use crate::handlers::markups::inlines::whisper::{handle_whisper_inline, is_whisper_query};
 
 pub fn inline_query_handler() -> Handler<
     'static,
     Result<(), MyError>,
     teloxide::dispatching::DpHandlerDescription,
 > {
-    dptree::entry().branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
+    dptree::entry()
+        .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
         .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
+        .branch(dptree::filter_async(is_whisper_query).endpoint(handle_whisper_inline))
 }
 
 async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
