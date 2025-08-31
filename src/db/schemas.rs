@@ -2,12 +2,12 @@ pub mod group;
 pub mod user;
 pub mod settings;
 
+use crate::db::schemas::settings::ModuleSettings;
 use crate::util::currency::converter::CurrencyStruct;
+use crate::util::errors::MyError;
 use async_trait::async_trait;
 use mongodb::results::UpdateResult;
 use oximod::_error::oximod_error::OxiModError;
-use crate::db::schemas::settings::ModuleSettings;
-use crate::util::errors::MyError;
 
 #[async_trait]
 pub trait BaseFunctions: Sized {
@@ -29,6 +29,16 @@ pub trait SettingsRepo {
     async fn get_or_create(owner_id: &str, owner_type: &str) -> Result<Self, MyError>
     where
         Self: Sized;
+
+    async fn update_module<F>(
+        owner_id: &str,
+        owner_type: &str,
+        module_key: &str,
+        modifier: F,
+    ) -> Result<Self, MyError>
+    where
+        Self: Sized,
+        F: FnOnce(&mut ModuleSettings) + Send;
 
     fn modules_mut(&mut self) -> &mut Vec<ModuleSettings>;
 }

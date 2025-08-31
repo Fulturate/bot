@@ -124,7 +124,6 @@ pub async fn currency_codes_list_handler(bot: Bot, msg: Message) -> Result<(), M
             .collect::<Vec<String>>()
             .join("\n");
 
-        // safety: assume that bot commands always exists
         let result = bot
             .get_my_commands()
             .await
@@ -139,7 +138,6 @@ pub async fn currency_codes_list_handler(bot: Bot, msg: Message) -> Result<(), M
                 codes_list, &command.command, &command.command
             );
         } else {
-            // default fallback
             message = format!(
                 "Available currencies to set up: <blockquote expandable>{}</blockquote>\n\nNotes:\n✅ - enabled\n❌ - disabled",
                 codes_list

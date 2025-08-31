@@ -17,6 +17,9 @@ pub struct User {
     #[index(sparse, name = "convertable_currencies")]
     #[serde(default)]
     pub convertable_currencies: Vec<CurrencyStruct>,
+
+    #[serde(default)]
+    pub download_count: i64,
 }
 
 #[async_trait]
@@ -57,17 +60,24 @@ impl CurrenciesFunctions for User {
             doc! {"user_id": user_id},
             doc! {"$push": {"convertable_currencies": currency_to_add } },
         )
-        .await
+            .await
     }
 
-    async fn remove_currency(
-        user_id: &str,
-        currency: &str,
-    ) -> Result<UpdateResult, OxiModError> {
+    async fn remove_currency(user_id: &str, currency: &str) -> Result<UpdateResult, OxiModError> {
         Self::update_one(
             doc! {"user_id": user_id},
             doc! {"$pull": {"convertable_currencies": {"code": currency} } },
         )
-        .await
+            .await
+    }
+}
+
+impl User {
+    pub async fn increment_download_count(user_id: &str) -> Result<UpdateResult, OxiModError> {
+        Self::update_one(
+            doc! { "user_id": user_id },
+            doc! { "$inc": { "download_count": 1 } },
+        )
+            .await
     }
 }

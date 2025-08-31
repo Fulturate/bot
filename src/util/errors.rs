@@ -1,4 +1,7 @@
+use std::string::FromUtf8Error;
 use crate::util::currency::converter::ConvertError;
+use ccobalt::model::error::CobaltError;
+use mongodb::bson;
 use oximod::_error::oximod_error::OxiModError;
 use redis;
 use teloxide::RequestError;
@@ -30,6 +33,27 @@ pub enum MyError {
 
     #[error("Application Error: {0}")]
     Other(String),
+
+    #[error("Bson serialization error: {0}")]
+    Bson(#[from] bson::ser::Error),
+
+    #[error("Module '{0}' not found")]
+    ModuleNotFound(String),
+
+    #[error("Uuid error: {0}")]
+    Uuid(#[from] uuid::Error),
+
+    #[error("Cobalt error: {0}")]
+    CobaltError(#[from] CobaltError),
+
+    #[error("BSON OID error: {0}")]
+    BsonOid(#[from] bson::oid::Error),
+
+    #[error("Base64 decoding error: {0}")]
+    Base64(#[from] base64::DecodeError),
+
+    #[error("UTF-8 conversion error: {0}")]
+    Utf8(#[from] FromUtf8Error),
 }
 
 impl From<&str> for MyError {

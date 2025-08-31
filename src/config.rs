@@ -1,10 +1,11 @@
 use crate::db::redis::RedisCache;
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{JsonConfig, read_json_config};
+use crate::util::json::{read_json_config, JsonConfig};
 use dotenv::dotenv;
 use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
+use teloxide::types::Me;
 
 #[derive(Clone)]
 pub struct Config {
@@ -35,6 +36,7 @@ impl Config {
         let cobalt_client = ccobalt::Client::builder()
             .base_url("https://cobalt-backend.canine.tools/")
             .api_key(cobalt_api_key)
+            .user_agent("Fulturate/6.6.6 (rust) (+https://github.com/weever1337/fulturate-rs)".to_string())
             .build()
             .expect("Failed to build cobalt client");
 
