@@ -97,7 +97,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
                     InlineKeyboardButton::callback("✨", "summarize"),
                     InlineKeyboardButton::callback(
                         "🗑️",
-                        format!("delete_{}", msg.from.unwrap().id.0),
+                        format!("delete_msg:{}", msg.from.unwrap().id.0),
                     ),
                 ]]);
 
@@ -189,7 +189,7 @@ pub async fn back_handler(bot: Bot, query: CallbackQuery, config: &Config) -> Re
     .parse_mode(ParseMode::Html)
     .reply_markup(InlineKeyboardMarkup::new(vec![vec![
         InlineKeyboardButton::callback("✨", "summarize"),
-        InlineKeyboardButton::callback("🗑️", format!("delete_{}", query.from.id.0)),
+        InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", query.from.id.0)),
     ]]))
     .await?;
 

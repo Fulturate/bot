@@ -18,7 +18,7 @@ pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Resul
         let qq = q.clone();
         let data = qq.data.clone().unwrap();
 
-        if data.starts_with("delete_") {
+        if data.starts_with("delete_msg") {
             delete_message_handler(bot, qq).await?
         } else if data.starts_with("summarize") {
             summarization_handler(bot, qq, &_config).await?

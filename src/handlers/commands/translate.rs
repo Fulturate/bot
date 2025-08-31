@@ -1,12 +1,11 @@
 use crate::config::Config;
 use crate::util::errors::MyError;
+use crate::util::inline::delete_message_button;
 use teloxide::prelude::*;
-use teloxide::repl;
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, Message, ParseMode, ReplyParameters,
 };
 use translators::{GoogleTranslator, Translator};
-use crate::util::inline::delete_message_button;
 
 pub const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
     ("uk", "🇺🇦 Українська"),

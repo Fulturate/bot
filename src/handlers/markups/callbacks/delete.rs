@@ -19,7 +19,7 @@ pub async fn delete_message_handler(bot: Bot, query: CallbackQuery) -> Result<()
 
     let clicker = query.from;
 
-    let target_user_id_str = data.strip_prefix("delete_").unwrap_or_default();
+    let target_user_id_str = data.strip_prefix("delete_msg:").unwrap_or_default();
     let Ok(target_user_id) = target_user_id_str.parse::<u64>() else {
         bot.answer_callback_query(query.id)
             .text("❌ Ошибка: неверный ID в кнопке.")
