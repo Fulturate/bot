@@ -1,6 +1,9 @@
+use crate::handlers::markups::inlines::cobalter::{handle_cobalt_inline, is_query_url};
 use crate::handlers::markups::inlines::currency::handle_currency_inline;
+use crate::handlers::markups::inlines::whisper::{handle_whisper_inline, is_whisper_query};
 use crate::handlers::messages::messager::{handle_currency, handle_speech};
 use crate::util::currency::converter::is_currency_query;
+use crate::util::inline::delete_message_button;
 use crate::{
     config::Config,
     handlers::{
@@ -11,24 +14,48 @@ use crate::{
 };
 use log::info;
 use oximod::set_global_client;
+use std::convert::Infallible;
+use std::fmt::Write;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use teloxide::dispatching::MessageFilterExt;
-use teloxide::prelude::{Handler, LoggingErrorHandler, Message};
+use teloxide::error_handlers::LoggingErrorHandler;
+use teloxide::payloads::SendDocumentSetters;
+use teloxide::prelude::{ChatId, Handler, Message, Requester};
+use teloxide::types::{Chat, InputFile, ParseMode, User};
 use teloxide::update_listeners::Polling;
+use teloxide::utils::html;
 use teloxide::{
-    dispatching::{Dispatcher, HandlerExt, UpdateFilterExt},
+    dispatching::{Dispatcher, DpHandlerDescription, HandlerExt, UpdateFilterExt},
     dptree,
-    prelude::Requester,
-    types::Update,
+    types::{Me, Update},
     utils::command::BotCommands,
+    Bot,
 };
-use crate::handlers::markups::inlines::cobalter::{handle_cobalt_inline, is_query_url};
-use crate::handlers::markups::inlines::whisper::{handle_whisper_inline, is_whisper_query};
+
+async fn root_handler(
+    update: Update,
+    config: Arc<Config>,
+    bot: Bot,
+    logic: Arc<Handler<'static, Result<(), MyError>, DpHandlerDescription>>,
+    me: Me,
+) -> Result<(), Infallible> {
+    let deps = dptree::deps![update.clone(), config.clone(), bot.clone(), me.clone()];
+    let result = logic.dispatch(deps).await;
+
+    if let ControlFlow::Break(Err(err)) = result {
+        let error_handler_endpoint: Handler<'static, (), DpHandlerDescription> = dptree::endpoint(handle_error);
+        let error_deps = dptree::deps![Arc::new(err), update, config, bot];
+        let _ = error_handler_endpoint.dispatch(error_deps).await;
+    }
+
+    Ok(())
+}
 
 pub fn inline_query_handler() -> Handler<
     'static,
     Result<(), MyError>,
-    teloxide::dispatching::DpHandlerDescription,
+    DpHandlerDescription,
 > {
     dptree::entry()
         .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
@@ -38,12 +65,10 @@ pub fn inline_query_handler() -> Handler<
 
 async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
     let command_menu = Command::bot_commands();
-    config
-        .get_bot()
-        .set_my_commands(command_menu.clone())
-        .await?;
+    let bot = config.get_bot();
+    bot.set_my_commands(command_menu.clone()).await?;
 
-    let handlers = dptree::entry()
+    let logic_handlers = dptree::entry()
         .branch(
             Update::filter_message()
                 .filter_command::<Command>()
@@ -58,33 +83,94 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
         .branch(Update::filter_my_chat_member().endpoint(handle_bot_added))
         .branch(Update::filter_inline_query().branch(inline_query_handler()));
 
-    let bot = config.get_bot().clone();
-    let bot_name = config.get_bot().get_my_name().await?;
+    let me = bot.get_me().await?;
+    info!("Bot name: {:?}", me.username());
 
-    info!("Bot name: {:?}", bot_name.name);
     let listener = Polling::builder(bot.clone()).drop_pending_updates().build();
 
-    Dispatcher::builder(bot.clone(), handlers)
-        .dependencies(dptree::deps![config.clone()])
+    Dispatcher::builder(bot.clone(), dptree::endpoint(root_handler))
+        .dependencies(dptree::deps![config.clone(), Arc::new(logic_handlers), me])
         .enable_ctrlc_handler()
         .build()
         .dispatch_with_listener(listener, LoggingErrorHandler::new())
         .await;
+
     Ok(())
 }
 
 async fn run_database(config: Arc<Config>) -> Result<(), MyError> {
     let url = config.get_mongodb_url().to_owned();
     set_global_client(url.clone()).await?;
-
     info!("Database connected successfully. URL: {}", url);
-
     Ok(())
 }
 
 pub async fn run() -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
-
     let _th = tokio::join!(run_database(config.clone()), run_bot(config.clone()));
     Ok(())
+}
+
+fn extract_info(update: &Update) -> (Option<&User>, Option<&Chat>) {
+    match &update.kind {
+        teloxide::types::UpdateKind::Message(m) => (m.from.as_ref(), Some(&m.chat)),
+        teloxide::types::UpdateKind::CallbackQuery(q) => {
+            (Some(&q.from), q.message.as_ref().map(|m| m.chat()))
+        }
+        teloxide::types::UpdateKind::InlineQuery(q) => (Some(&q.from), None),
+        teloxide::types::UpdateKind::MyChatMember(m) => (Some(&m.from), Some(&m.chat)),
+        _ => (None, None),
+    }
+}
+
+fn short_error_name(error: &MyError) -> String {
+    format!("{}", error)
+}
+
+pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>, bot: Bot) {
+    log::error!("An error has occurred: {:?}", err); // ahh fuck
+
+    let (user, chat) = extract_info(&update);
+    let mut message_text = String::new();
+
+    writeln!(&mut message_text, "🚨 <b>Новая ошибка!</b>\n").unwrap();
+
+    if let Some(chat) = chat {
+        let title = chat.title().map_or("".to_string(), |t| format!(" ({})", html::escape(t)));
+        writeln!(&mut message_text, "<b>В чате:</b> <code>{}</code>{}", chat.id, title).unwrap();
+    } else {
+        writeln!(&mut message_text, "<b>В чате:</b> <i>(???)</i>").unwrap();
+    }
+
+    if let Some(user) = user {
+        let username = user.username.as_ref().map_or("".to_string(), |u| format!(" (@{})", u));
+        let full_name = html::escape(&user.full_name());
+        writeln!(&mut message_text, "<b>Вызвал:</b> {} (<code>{}</code>){}", full_name, user.id, username).unwrap();
+    } else {
+        writeln!(&mut message_text, "<b>Вызвал:</b> <i>(???)</i>").unwrap();
+    }
+
+    let error_name = short_error_name(&err);
+    writeln!(&mut message_text, "\n<b>Ошибка:</b>\n<blockquote expandable>{}</blockquote>", html::escape(&error_name)).unwrap();
+
+    let hashtag = "#error";
+    writeln!(&mut message_text, "\n{}", hashtag).unwrap();
+
+    let full_error_text = format!("{:#?}", err);
+    let document = InputFile::memory(full_error_text.into_bytes()).file_name("error_details.txt");
+
+    if let Ok(log_chat_id) = config.get_log_chat_id().parse::<i64>() {
+        let chat_id = ChatId(log_chat_id);
+
+        match bot.send_document(chat_id, document)
+            .caption(message_text)
+            .parse_mode(ParseMode::Html)
+            .reply_markup(delete_message_button(72))
+            .await {
+            Ok(_) => info!("Error report sent successfully to chat {}", log_chat_id),
+            Err(e) => log::error!("Failed to send error report to chat {}: {}", log_chat_id, e),
+        }
+    } else {
+        log::error!("LOG_CHAT_ID is not a valid integer: {}", config.get_log_chat_id());
+    }
 }

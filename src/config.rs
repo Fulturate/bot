@@ -12,6 +12,7 @@ pub struct Config {
     cobalt_client: ccobalt::Client,
     #[allow(dead_code)]
     owners: Vec<String>,
+    log_chat_id: String,
     version: String,
     json_config: JsonConfig,
     currency_converter: Arc<CurrencyConverter>,
@@ -40,6 +41,8 @@ impl Config {
             .filter_map(|id| id.trim().parse().ok())
             .collect();
 
+        let log_chat_id = std::env::var("LOG_CHAT_ID").expect("LOG_CHAT_ID expected");
+
         let json_config = read_json_config("config.json").expect("Unable to read config.json");
         let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
         let mongodb_url = std::env::var("MONGODB_URL").expect("MONGODB_URL expected");
@@ -53,6 +56,7 @@ impl Config {
             bot,
             cobalt_client,
             owners,
+            log_chat_id,
             version,
             json_config,
             currency_converter,
@@ -76,6 +80,10 @@ impl Config {
     #[allow(dead_code)]
     pub fn is_id_in_owners(&self, id: String) -> bool {
         self.owners.contains(&id)
+    }
+
+    pub fn get_log_chat_id(&self) -> &str {
+        &self.log_chat_id
     }
 
     pub fn get_json_config(&self) -> &JsonConfig {
