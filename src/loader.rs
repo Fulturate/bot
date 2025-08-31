@@ -12,7 +12,7 @@ use crate::{
     },
     util::{enums::Command, errors::MyError},
 };
-use log::info;
+use log::{error, info};
 use oximod::set_global_client;
 use std::convert::Infallible;
 use std::fmt::Write;
@@ -22,7 +22,7 @@ use teloxide::dispatching::MessageFilterExt;
 use teloxide::error_handlers::LoggingErrorHandler;
 use teloxide::payloads::SendDocumentSetters;
 use teloxide::prelude::{ChatId, Handler, Message, Requester};
-use teloxide::types::{Chat, InputFile, ParseMode, User};
+use teloxide::types::{Chat, InputFile, MessageId, ParseMode, ThreadId, User};
 use teloxide::update_listeners::Polling;
 use teloxide::utils::html;
 use teloxide::{
@@ -128,7 +128,7 @@ fn short_error_name(error: &MyError) -> String {
 }
 
 pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>, bot: Bot) {
-    log::error!("An error has occurred: {:?}", err); // ahh fuck
+    error!("An error has occurred: {:?}", err); // ahh fuck
 
     let (user, chat) = extract_info(&update);
     let mut message_text = String::new();
@@ -159,18 +159,19 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
     let full_error_text = format!("{:#?}", err);
     let document = InputFile::memory(full_error_text.into_bytes()).file_name("error_details.txt");
 
-    if let Ok(log_chat_id) = config.get_log_chat_id().parse::<i64>() {
+    if let (Ok(log_chat_id), Ok(error_thread_id)) = (config.get_log_chat_id().parse::<i64>(), config.get_error_chat_thread_id().parse::<i32>()) {
         let chat_id = ChatId(log_chat_id);
 
         match bot.send_document(chat_id, document)
             .caption(message_text)
             .parse_mode(ParseMode::Html)
             .reply_markup(delete_message_button(72))
+            .message_thread_id(ThreadId(MessageId(error_thread_id)))
             .await {
             Ok(_) => info!("Error report sent successfully to chat {}", log_chat_id),
-            Err(e) => log::error!("Failed to send error report to chat {}: {}", log_chat_id, e),
+            Err(e) => error!("Failed to send error report to chat {}: {}", log_chat_id, e),
         }
     } else {
-        log::error!("LOG_CHAT_ID is not a valid integer: {}", config.get_log_chat_id());
+        error!("LOG_CHAT_ID ({}) or ERROR_CHAT_THREAD_ID ({}) is not a valid integer", config.get_log_chat_id(), config.get_error_chat_thread_id());
     }
 }

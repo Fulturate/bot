@@ -13,6 +13,9 @@ pub struct Config {
     #[allow(dead_code)]
     owners: Vec<String>,
     log_chat_id: String,
+    error_chat_thread_id: String,
+    #[allow(dead_code)]
+    warn_chat_thread_id: String,
     version: String,
     json_config: JsonConfig,
     currency_converter: Arc<CurrencyConverter>,
@@ -42,6 +45,15 @@ impl Config {
             .collect();
 
         let log_chat_id = std::env::var("LOG_CHAT_ID").expect("LOG_CHAT_ID expected");
+        let error_chat_thread_id: String = std::env::var("ERROR_CHAT_THREAD_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.to_string());
+
+        let warn_chat_thread_id: String = std::env::var("WARN_CHAT_THREAD_ID")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.to_string());
 
         let json_config = read_json_config("config.json").expect("Unable to read config.json");
         let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
@@ -57,6 +69,8 @@ impl Config {
             cobalt_client,
             owners,
             log_chat_id,
+            error_chat_thread_id,
+            warn_chat_thread_id,
             version,
             json_config,
             currency_converter,
@@ -84,6 +98,15 @@ impl Config {
 
     pub fn get_log_chat_id(&self) -> &str {
         &self.log_chat_id
+    }
+
+    pub fn get_error_chat_thread_id(&self) -> &str {
+        &self.error_chat_thread_id
+    }
+
+    #[allow(dead_code)]
+    pub fn get_warn_chat_thread_id(&self) -> &str {
+        &self.warn_chat_thread_id
     }
 
     pub fn get_json_config(&self) -> &JsonConfig {
