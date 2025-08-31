@@ -1,11 +1,12 @@
 use crate::config::Config;
 use crate::util::errors::MyError;
 use crate::util::transcription::{
-    back_handler, delete_transcription_handler, summarization_handler,
+    back_handler, summarization_handler,
 };
 use teloxide::Bot;
 use teloxide::requests::Requester;
 use teloxide::types::CallbackQuery;
+use crate::handlers::markups::callbacks::delete::delete_message_handler;
 use crate::handlers::markups::callbacks::module::{module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler};
 use crate::handlers::markups::callbacks::translate::handle_translate_callback;
 use crate::handlers::markups::callbacks::whisper::handle_whisper_callback;
@@ -18,7 +19,7 @@ pub(crate) async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Resul
         let data = qq.data.clone().unwrap();
 
         if data.starts_with("delete_") {
-            delete_transcription_handler(bot, qq).await?
+            delete_message_handler(bot, qq).await?
         } else if data.starts_with("summarize") {
             summarization_handler(bot, qq, &_config).await?
         } else if data.starts_with("back_to_full") {

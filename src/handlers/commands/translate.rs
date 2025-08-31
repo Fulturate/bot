@@ -1,10 +1,12 @@
 use crate::config::Config;
 use crate::util::errors::MyError;
 use teloxide::prelude::*;
+use teloxide::repl;
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, Message, ParseMode, ReplyParameters,
 };
 use translators::{GoogleTranslator, Translator};
+use crate::util::inline::delete_message_button;
 
 pub const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
     ("uk", "🇺🇦 Українська"),
@@ -79,7 +81,7 @@ pub async fn translate_handler(
     };
 
     let user = msg.from.clone().unwrap();
-    if user.is_bot {
+    if replied_to_message.clone().from.unwrap().is_bot {
         bot.send_message(msg.chat.id, "Отвечать нужно на сообщение от пользователя.")
             .reply_parameters(ReplyParameters::new(msg.id))
             .parse_mode(ParseMode::Html)
@@ -125,10 +127,17 @@ pub async fn translate_handler(
         .map(|(_, name)| *name)
         .unwrap_or(&target_lang);
 
-    let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        InlineKeyboardButton::callback(lang_display_name.to_string(), "tr_show_langs".to_string()),
-    ]]);
+    let switch_lang_button = InlineKeyboardButton::callback(
+        lang_display_name.to_string(),
+        "tr_show_langs".to_string(),
+    );
 
+    let mut keyboard = delete_message_button(user.id.0);
+    if let Some(first_row) = keyboard.inline_keyboard.get_mut(0) {
+        first_row.insert(0, switch_lang_button);
+    } else {
+        keyboard.inline_keyboard.push(vec![switch_lang_button]);
+    }
 
     bot.send_message(msg.chat.id, response)
         .reply_parameters(ReplyParameters::new(replied_to_message.id))
