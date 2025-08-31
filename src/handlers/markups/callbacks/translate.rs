@@ -2,6 +2,7 @@ use teloxide::Bot;
 use teloxide::payloads::{EditMessageReplyMarkupSetters, EditMessageTextSetters};
 use teloxide::prelude::Requester;
 use teloxide::types::{CallbackQuery, InlineKeyboardButton, MaybeInaccessibleMessage, Message, ParseMode};
+use teloxide::{ApiError, RequestError};
 use crate::config::Config;
 use crate::util::errors::MyError;
 use translators::{GoogleTranslator, Translator};
@@ -35,16 +36,22 @@ async fn handle_pagination(bot: Bot, message: &Message, data: &str) -> Result<()
     match data.trim_start_matches("tr_page:").parse::<usize>() {
         Ok(page) => {
             let keyboard = create_language_keyboard(page);
-            bot.edit_message_reply_markup(message.chat.id, message.id)
+            if let Err(e) = bot
+                .edit_message_reply_markup(message.chat.id, message.id)
                 .reply_markup(keyboard)
-                .await?;
-            Ok(())
+                .await
+            {
+                if let RequestError::Api(ApiError::MessageNotModified) = e {
+                } else {
+                    return Err(MyError::from(e));
+                }
+            }
         }
         Err(_) => {
             log::warn!("Failed to parse page number from: {}", data);
-            Ok(())
         }
     }
+    Ok(())
 }
 
 async fn handle_language_selection(
@@ -76,7 +83,7 @@ async fn handle_language_selection(
 
     let redis_key = format!("user_lang:{}", user.id);
     let redis_client = config.get_redis_client();
-    let ttl_seconds = 2 * 60 * 60; // 2 hours
+    let ttl_seconds = 2 * 60 * 60;
     redis_client
         .set(&redis_key, &target_lang.to_string(), ttl_seconds)
         .await?;
@@ -111,18 +118,32 @@ async fn handle_language_selection(
         keyboard.inline_keyboard.push(vec![switch_lang_button]);
     }
 
-    bot.edit_message_text(message.chat.id, message.id, response)
+    if let Err(e) = bot
+        .edit_message_text(message.chat.id, message.id, response)
         .parse_mode(ParseMode::Html)
         .reply_markup(keyboard)
-        .await?;
+        .await
+    {
+        if let RequestError::Api(ApiError::MessageNotModified) = e {
+        } else {
+            return Err(MyError::from(e));
+        }
+    }
 
     Ok(())
 }
 
 async fn handle_show_languages(bot: Bot, message: &Message) -> Result<(), MyError> {
     let keyboard = create_language_keyboard(0);
-    bot.edit_message_text(message.chat.id, message.id, "Выберите язык для перевода:")
+    if let Err(e) = bot
+        .edit_message_text(message.chat.id, message.id, "Выберите язык для перевода:")
         .reply_markup(keyboard)
-        .await?;
+        .await
+    {
+        if let RequestError::Api(ApiError::MessageNotModified) = e {
+        } else {
+            return Err(MyError::from(e));
+        }
+    }
     Ok(())
 }
