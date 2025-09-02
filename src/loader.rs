@@ -26,11 +26,11 @@ use teloxide::types::{Chat, InputFile, MessageId, ParseMode, ThreadId, User};
 use teloxide::update_listeners::Polling;
 use teloxide::utils::html;
 use teloxide::{
+    Bot,
     dispatching::{Dispatcher, DpHandlerDescription, HandlerExt, UpdateFilterExt},
     dptree,
     types::{Me, Update},
     utils::command::BotCommands,
-    Bot,
 };
 
 async fn root_handler(
@@ -44,7 +44,8 @@ async fn root_handler(
     let result = logic.dispatch(deps).await;
 
     if let ControlFlow::Break(Err(err)) = result {
-        let error_handler_endpoint: Handler<'static, (), DpHandlerDescription> = dptree::endpoint(handle_error);
+        let error_handler_endpoint: Handler<'static, (), DpHandlerDescription> =
+            dptree::endpoint(handle_error);
         let error_deps = dptree::deps![Arc::new(err), update, config, bot];
         let _ = error_handler_endpoint.dispatch(error_deps).await;
     }
@@ -52,11 +53,7 @@ async fn root_handler(
     Ok(())
 }
 
-pub fn inline_query_handler() -> Handler<
-    'static,
-    Result<(), MyError>,
-    DpHandlerDescription,
-> {
+pub fn inline_query_handler() -> Handler<'static, Result<(), MyError>, DpHandlerDescription> {
     dptree::entry()
         .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
         .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
@@ -77,6 +74,7 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
         .branch(
             Update::filter_message()
                 .branch(Message::filter_text().endpoint(handle_currency))
+                .branch(Message::filter_video_note().endpoint(handle_speech))
                 .branch(Message::filter_voice().endpoint(handle_speech)),
         )
         .branch(Update::filter_callback_query().endpoint(callback_query_handlers))
@@ -136,22 +134,42 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
     writeln!(&mut message_text, "🚨 <b>Новая ошибка!</b>\n").unwrap();
 
     if let Some(chat) = chat {
-        let title = chat.title().map_or("".to_string(), |t| format!(" ({})", html::escape(t)));
-        writeln!(&mut message_text, "<b>В чате:</b> <code>{}</code>{}", chat.id, title).unwrap();
+        let title = chat
+            .title()
+            .map_or("".to_string(), |t| format!(" ({})", html::escape(t)));
+        writeln!(
+            &mut message_text,
+            "<b>В чате:</b> <code>{}</code>{}",
+            chat.id, title
+        )
+        .unwrap();
     } else {
         writeln!(&mut message_text, "<b>В чате:</b> <i>(???)</i>").unwrap();
     }
 
     if let Some(user) = user {
-        let username = user.username.as_ref().map_or("".to_string(), |u| format!(" (@{})", u));
+        let username = user
+            .username
+            .as_ref()
+            .map_or("".to_string(), |u| format!(" (@{})", u));
         let full_name = html::escape(&user.full_name());
-        writeln!(&mut message_text, "<b>Вызвал:</b> {} (<code>{}</code>){}", full_name, user.id, username).unwrap();
+        writeln!(
+            &mut message_text,
+            "<b>Вызвал:</b> {} (<code>{}</code>){}",
+            full_name, user.id, username
+        )
+        .unwrap();
     } else {
         writeln!(&mut message_text, "<b>Вызвал:</b> <i>(???)</i>").unwrap();
     }
 
     let error_name = short_error_name(&err);
-    writeln!(&mut message_text, "\n<b>Ошибка:</b>\n<blockquote expandable>{}</blockquote>", html::escape(&error_name)).unwrap();
+    writeln!(
+        &mut message_text,
+        "\n<b>Ошибка:</b>\n<blockquote expandable>{}</blockquote>",
+        html::escape(&error_name)
+    )
+    .unwrap();
 
     let hashtag = "#error";
     writeln!(&mut message_text, "\n{}", hashtag).unwrap();
@@ -159,19 +177,28 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
     let full_error_text = format!("{:#?}", err);
     let document = InputFile::memory(full_error_text.into_bytes()).file_name("error_details.txt");
 
-    if let (Ok(log_chat_id), Ok(error_thread_id)) = (config.get_log_chat_id().parse::<i64>(), config.get_error_chat_thread_id().parse::<i32>()) {
+    if let (Ok(log_chat_id), Ok(error_thread_id)) = (
+        config.get_log_chat_id().parse::<i64>(),
+        config.get_error_chat_thread_id().parse::<i32>(),
+    ) {
         let chat_id = ChatId(log_chat_id);
 
-        match bot.send_document(chat_id, document)
+        match bot
+            .send_document(chat_id, document)
             .caption(message_text)
             .parse_mode(ParseMode::Html)
             .reply_markup(delete_message_button(72))
             .message_thread_id(ThreadId(MessageId(error_thread_id)))
-            .await {
+            .await
+        {
             Ok(_) => info!("Error report sent successfully to chat {}", log_chat_id),
             Err(e) => error!("Failed to send error report to chat {}: {}", log_chat_id, e),
         }
     } else {
-        error!("LOG_CHAT_ID ({}) or ERROR_CHAT_THREAD_ID ({}) is not a valid integer", config.get_log_chat_id(), config.get_error_chat_thread_id());
+        error!(
+            "LOG_CHAT_ID ({}) or ERROR_CHAT_THREAD_ID ({}) is not a valid integer",
+            config.get_log_chat_id(),
+            config.get_error_chat_thread_id()
+        );
     }
 }
