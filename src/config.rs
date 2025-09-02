@@ -2,6 +2,7 @@ use crate::db::redis::RedisCache;
 use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
 use crate::util::json::{JsonConfig, read_json_config};
 use dotenv::dotenv;
+use log::error;
 use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
@@ -28,9 +29,18 @@ impl Config {
     pub async fn new() -> Self {
         dotenv().ok();
 
-        let bot_token = std::env::var("BOT_TOKEN").expect("BOT_TOKEN expected");
-        let cobalt_api_key = std::env::var("COBALT_API_KEY").expect("COBALT_API_KEY expected");
-        let version = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION expected");
+        let Ok(bot_token) = std::env::var("BOT_TOKEN") else {
+            error!("Expected BOT_TOKEN env var");
+            std::process::exit(1);
+        };
+        let Ok(cobalt_api_key) = std::env::var("COBALT_API_KEY") else {
+            error!("COBALT_API_KEY expected");
+            std::process::exit(1);
+        };
+        let Ok(version) = std::env::var("CARGO_PKG_VERSION") else {
+            error!("CARGO_PKG_VERSION expected");
+            std::process::exit(1);
+        };
         let bot = Bot::new(bot_token);
 
         let cobalt_client = ccobalt::Client::builder()
@@ -40,15 +50,24 @@ impl Config {
                 "Fulturate/6.6.6 (rust) (+https://github.com/weever1337/fulturate-rs)".to_string(),
             )
             .build()
-            .expect("Failed to build cobalt client");
+            .unwrap_or_else(|_err| {
+                error!("Failed to build cobalt client");
+                std::process::exit(1);
+            });
 
         let owners: Vec<String> = std::env::var("OWNERS")
-            .expect("OWNERS expected")
+            .unwrap_or_else(|_| {
+                error!("OWNERS expected");
+                std::process::exit(1)
+            })
             .split(',')
             .filter_map(|id| id.trim().parse().ok())
             .collect();
 
-        let log_chat_id = std::env::var("LOG_CHAT_ID").expect("LOG_CHAT_ID expected");
+        let Ok(log_chat_id) = std::env::var("LOG_CHAT_ID") else {
+            error!("LOG_CHAT_ID expected");
+            std::process::exit(1);
+        };
         let error_chat_thread_id: String = std::env::var("ERROR_CHAT_THREAD_ID")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -59,13 +78,25 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.to_string());
 
-        let json_config = read_json_config("config.json").expect("Unable to read config.json");
+        let Ok(json_config) = read_json_config("config.json") else {
+            error!("Unable to read config.json");
+            std::process::exit(1);
+        };
         let currency_converter = Arc::new(CurrencyConverter::new(OutputLanguage::Russian).unwrap()); // TODO: get language from config
-        let mongodb_url = std::env::var("MONGODB_URL").expect("MONGODB_URL expected");
+        let Ok(mongodb_url) = std::env::var("MONGODB_URL") else {
+            error!("MONGODB_URL expected");
+            std::process::exit(1);
+        };
 
-        let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL expected");
-        let redis_client = RedisClient::open(redis_url).expect("Failed to open Redis client");
+        let Ok(redis_url) = std::env::var("REDIS_URL") else {
+            error!("REDIS_URL expected");
+            std::process::exit(1);
+        };
 
+        let Ok(redis_client) = RedisClient::open(redis_url.to_owned()) else {
+            error!("Failed to open Redis client");
+            std::process::exit(1);
+        };
         let redis_client = RedisCache::new(redis_client);
 
         Config {
