@@ -6,7 +6,6 @@ use log::error;
 use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
-use teloxide::types::Me;
 
 #[derive(Clone)]
 pub struct Config {

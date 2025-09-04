@@ -168,7 +168,7 @@ pub async fn settings_command_handler(
 
     let owner_type = if message.chat.is_private() { "user" } else { "group" };
 
-    let settings = Settings::get_or_create(&owner_id, &owner_type).await?;
+    let settings = Settings::get_or_create(&owner_id, owner_type).await?;
 
     let keyboard = InlineKeyboardMarkup::new(
         settings

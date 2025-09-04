@@ -47,7 +47,7 @@ async fn get_cached(
 
     if processed_parts.is_empty() || processed_parts[0].contains("Не удалось преобразовать")
     {
-        let error_message = processed_parts.get(0).cloned().unwrap_or_default();
+        let error_message = processed_parts.first().cloned().unwrap_or_default();
         return Err(MyError::Other(error_message));
     }
 

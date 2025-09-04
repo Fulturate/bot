@@ -1,4 +1,4 @@
-use crate::handlers::markups::inlines::cobalter::{handle_cobalt_inline, is_query_url};
+use crate::handlers::markups::inlines::cobalter::{handle_chosen_inline_video, handle_cobalt_inline, is_query_url};
 use crate::handlers::markups::inlines::currency::handle_currency_inline;
 use crate::handlers::markups::inlines::whisper::{handle_whisper_inline, is_whisper_query};
 use crate::handlers::messages::messager::{handle_currency, handle_speech};
@@ -79,7 +79,8 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
         )
         .branch(Update::filter_callback_query().endpoint(callback_query_handlers))
         .branch(Update::filter_my_chat_member().endpoint(handle_bot_added))
-        .branch(Update::filter_inline_query().branch(inline_query_handler()));
+        .branch(Update::filter_inline_query().branch(inline_query_handler())
+        .branch(Update::filter_chosen_inline_result().endpoint(handle_chosen_inline_video)));
 
     let me = bot.get_me().await?;
     info!("Bot name: {:?}", me.username());

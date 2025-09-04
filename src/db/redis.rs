@@ -49,4 +49,19 @@ impl RedisCache {
 
         Ok(result.and_then(|s| serde_json::from_str(&s).ok()))
     }
+
+    pub async fn set_url_hash_mapping(
+        &self,
+        url_hash: &str,
+        original_url: &str,
+        ttl_seconds: usize,
+    ) -> Result<(), RedisError> {
+        let key = format!("url_hash:{}", url_hash);
+        self.set(&key, &original_url.to_string(), ttl_seconds).await
+    }
+
+    pub async fn get_url_by_hash(&self, url_hash: &str) -> Result<Option<String>, RedisError> {
+        let key = format!("url_hash:{}", url_hash);
+        self.get(&key).await
+    }
 }
