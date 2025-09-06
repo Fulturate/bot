@@ -1,19 +1,23 @@
 use serde::{Deserialize, Serialize};
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
-use teloxide::payloads::AnswerInlineQuerySetters;
-use teloxide::prelude::Requester;
-use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputMessageContentText, ParseMode};
 use teloxide::Bot;
+use teloxide::payloads::AnswerInlineQuerySetters;
+use teloxide::prelude::{Requester, UserId};
+use teloxide::types::{
+    InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+    InlineQueryResultArticle, InputMessageContent, InputMessageContentText, ParseMode,
+};
 use uuid::Uuid;
 
 use crate::config::Config;
 use crate::util::errors::MyError;
-use log::{error};
+use log::error;
 use teloxide::utils::html;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Recipient {
-    pub id: u64,
+    pub id: Option<u64>,
     pub first_name: String,
     pub username: Option<String>,
 }
@@ -24,6 +28,14 @@ pub struct Whisper {
     pub sender_first_name: String,
     pub content: String,
     pub recipients: Vec<Recipient>,
+}
+
+fn generate_recipient_hash(person: &Recipient) -> String {
+    let mut s = DefaultHasher::new();
+    person.id.hash(&mut s);
+    person.username.hash(&mut s);
+
+    format!("{:x}", s.finish())
 }
 
 fn parse_query(query: &str) -> (String, Vec<String>) {
@@ -60,7 +72,12 @@ async fn update_recents(
         .unwrap_or_default();
 
     for new_recipient in new_recipients.iter().rev() {
-        recents.retain(|r| r.id != new_recipient.id);
+        recents.retain(|r| {
+            let is_same_id = new_recipient.id.is_some() && r.id == new_recipient.id;
+            let is_same_username =
+                new_recipient.username.is_some() && r.username == new_recipient.username;
+            !is_same_id && !is_same_username
+        });
         recents.insert(0, new_recipient.clone());
     }
 
@@ -88,7 +105,9 @@ pub async fn handle_whisper_inline(
         )
             .description("Пример: Привет! @username 123456789");
 
-        bot.answer_inline_query(q.id, vec![InlineQueryResult::Article(article)]).cache_time(5).await?;
+        bot.answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
+            .cache_time(5)
+            .await?;
         return Ok(());
     }
 
@@ -101,37 +120,39 @@ pub async fn handle_whisper_inline(
 
     if recipient_identifiers.is_empty() {
         let redis_key = format!("whisper_recents:{}", q.from.id.0);
-        let _recents: Option<Vec<Recipient>> = config.get_redis_client().get(&redis_key).await?;
+        let recents: Option<Vec<Recipient>> = config.get_redis_client().get(&redis_key).await?;
 
         let mut results = Vec::new();
-        // if let Some(recents) = recents { // todo: fix this. i'm lazy
-        //     for person in recents {
-        //         let query_filler = person
-        //             .username
-        //             .as_ref()
-        //             .map(|u| format!("@{}", u))
-        //             .unwrap_or_else(|| person.id.to_string());
-        //
-        //         let keyboard = InlineKeyboardMarkup::new(vec![vec![
-        //             InlineKeyboardButton::switch_inline_query_current_chat(
-        //                 format!("Выбрать {}", person.first_name),
-        //                 format!("{} ", query_filler),
-        //             ),
-        //         ]]);
-        //
-        //         let article = InlineQueryResultArticle::new(
-        //             format!("recent_{}", person.id),
-        //             format!("✍️ Написать {}", person.first_name),
-        //             InputMessageContent::Text(InputMessageContentText::new(format!(
-        //                 "Нажмите кнопку ниже, чтобы начать шепот для {}",
-        //                 person.first_name
-        //             ))),
-        //         )
-        //             .description("Нажмите кнопку ниже, чтобы выбрать этого пользователя")
-        //             .reply_markup(keyboard);
-        //         results.push(InlineQueryResult::Article(article));
-        //     }
-        // }
+        if let Some(recents) = recents {
+            for person in recents {
+                let query_filler = if let Some(u) = &person.username {
+                    format!("@{}", u)
+                } else if let Some(id) = person.id {
+                    id.to_string()
+                } else {
+                    continue;
+                };
+
+                let keyboard = InlineKeyboardMarkup::new(vec![vec![
+                    InlineKeyboardButton::switch_inline_query_current_chat(
+                        format!("Выбрать {}", person.first_name),
+                        format!("{} {} ", q.query.trim(), query_filler),
+                    ),
+                ]]);
+
+                let article = InlineQueryResultArticle::new(
+                    format!("recent_{}", generate_recipient_hash(&person)),
+                    format!("✍️ Написать {}", person.first_name),
+                    InputMessageContent::Text(InputMessageContentText::new(format!(
+                        "Нажмите кнопку ниже, чтобы начать шепот для {}",
+                        person.first_name
+                    ))),
+                )
+                .description("Нажмите кнопку ниже, чтобы выбрать этого пользователя")
+                .reply_markup(keyboard);
+                results.push(InlineQueryResult::Article(article));
+            }
+        }
 
         let article = InlineQueryResultArticle::new(
             "whisper_no_recipients",
@@ -140,7 +161,7 @@ pub async fn handle_whisper_inline(
                 "Укажите получателей, добавив их юзернеймы (@username) или ID в конце сообщения.",
             )),
         )
-            .description("Вы не указали получателя.");
+        .description("Вы не указали получателя.");
         results.push(InlineQueryResult::Article(article));
 
         bot.answer_inline_query(q.id, results)
@@ -152,14 +173,15 @@ pub async fn handle_whisper_inline(
     let mut recipients: Vec<Recipient> = Vec::new();
     for identifier in &recipient_identifiers {
         if identifier.starts_with('@') {
+            let username = identifier[1..].to_string();
             recipients.push(Recipient {
-                id: 0,
-                first_name: identifier[1..].to_string(),
-                username: Some(identifier[1..].to_string()),
+                id: None,
+                first_name: username.clone(),
+                username: Some(username.to_lowercase()),
             });
         } else if let Ok(id) = identifier.parse::<u64>() {
             recipients.push(Recipient {
-                id,
+                id: Some(id),
                 first_name: format!("{}", id),
                 username: None,
             });
@@ -167,14 +189,14 @@ pub async fn handle_whisper_inline(
     }
 
     recipients.push(Recipient {
-        id: sender.id.0,
+        id: Some(sender.id.0),
         first_name: sender.first_name.clone(),
         username: sender.username.clone(),
     });
 
     let recipients_for_recents: Vec<Recipient> = recipients
         .iter()
-        .filter(|r| r.id != sender.id.0)
+        .filter(|r| r.id != Some(sender.id.0))
         .cloned()
         .collect();
 
@@ -193,21 +215,34 @@ pub async fn handle_whisper_inline(
     };
 
     let redis_key = format!("whisper:{}", whisper_id);
-    config.get_redis_client().set(&redis_key, &whisper, 86400).await?;
+    config
+        .get_redis_client()
+        .set(&redis_key, &whisper, 86400)
+        .await?;
 
     let keyboard = InlineKeyboardMarkup::new(vec![vec![
         InlineKeyboardButton::callback("👁️ Прочитать", format!("whisper_read_{}", whisper_id)),
         InlineKeyboardButton::callback("🗑️ Забыть", format!("whisper_forget_{}", whisper_id)),
     ]]);
 
-    let recipients_str = whisper.recipients
+    let recipients_str = whisper
+        .recipients
         .iter()
-        .filter(|r| r.id != sender.id.0)
-        .map(|r| format!("<a href=\"tg://user?id={}\">{}</a>", r.id, html::escape(&r.first_name)))
+        .filter(|r| r.id != Some(sender.id.0))
+        .map(|r| {
+            if let Some(id) = r.id {
+                html::user_mention(UserId(id), &r.first_name)
+            } else {
+                format!("@{}", html::escape(&r.first_name))
+            }
+        })
         .collect::<Vec<_>>()
         .join(", ");
 
-    let message_text = format!("🤫 {} шепчет для {}", whisper.sender_first_name, recipients_str);
+    let message_text = format!(
+        "🤫 {} шепчет для {}",
+        whisper.sender_first_name, recipients_str
+    );
 
     let article = InlineQueryResultArticle::new(
         whisper_id,
@@ -216,8 +251,8 @@ pub async fn handle_whisper_inline(
             InputMessageContentText::new(message_text).parse_mode(ParseMode::Html),
         ),
     )
-        .description(format!("Сообщение: {}", content))
-        .reply_markup(keyboard);
+    .description(format!("Сообщение: {}", content))
+    .reply_markup(keyboard);
 
     if let Err(e) = bot
         .answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])

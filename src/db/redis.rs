@@ -1,5 +1,5 @@
 use redis::{AsyncCommands, Client, RedisError};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 #[derive(Clone)]
 pub struct RedisCache {
@@ -35,6 +35,7 @@ impl RedisCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub async fn get_and_delete<T: DeserializeOwned>(
         &self,
         key: &str,
@@ -50,6 +51,7 @@ impl RedisCache {
         Ok(result.and_then(|s| serde_json::from_str(&s).ok()))
     }
 
+    #[allow(dead_code)]
     pub async fn set_url_hash_mapping(
         &self,
         url_hash: &str,
@@ -60,6 +62,8 @@ impl RedisCache {
         self.set(&key, &original_url.to_string(), ttl_seconds).await
     }
 
+    // todo: remove them on pre-release stage
+    #[allow(dead_code)]
     pub async fn get_url_by_hash(&self, url_hash: &str) -> Result<Option<String>, RedisError> {
         let key = format!("url_hash:{}", url_hash);
         self.get(&key).await

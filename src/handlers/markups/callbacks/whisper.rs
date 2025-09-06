@@ -1,10 +1,10 @@
 use super::super::inlines::whisper::Whisper;
 use crate::config::Config;
 use crate::util::errors::MyError;
+use teloxide::Bot;
 use teloxide::payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters};
 use teloxide::prelude::{CallbackQuery, Requester};
 use teloxide::types::InlineKeyboardMarkup;
-use teloxide::Bot;
 
 pub async fn handle_whisper_callback(
     bot: Bot,
@@ -40,13 +40,18 @@ pub async fn handle_whisper_callback(
 
     let is_sender = user.id.0 == whisper.sender_id;
     let is_recipient = whisper.recipients.iter().any(|r| {
-        if r.id != 0 {
-            r.id == user.id.0
-        } else if let Some(uname) = &r.username {
-            uname == &username
-        } else {
-            false
+        if r.id == Some(user.id.0) {
+            return true;
         }
+
+        if let (Some(recipient_username), Some(username)) = (
+            &r.username,
+            &user.username.as_ref().map(|s| s.to_lowercase()),
+        ) && recipient_username == username
+        {
+            return true;
+        }
+        false
     });
 
     if !is_sender && !is_recipient {
@@ -67,9 +72,7 @@ pub async fn handle_whisper_callback(
         }
         "forget" => {
             config.get_redis_client().delete(&redis_key).await?;
-            bot.answer_callback_query(q.id)
-                .text("Шепот забыт.")
-                .await?;
+            bot.answer_callback_query(q.id).text("Шепот забыт.").await?;
 
             if let Some(message) = q.message {
                 bot.edit_message_text(
@@ -77,8 +80,8 @@ pub async fn handle_whisper_callback(
                     message.id(),
                     format!("🤫 Шепот от {} был забыт.", whisper.sender_first_name),
                 )
-                    .reply_markup(InlineKeyboardMarkup::new(vec![vec![]]))
-                    .await?;
+                .reply_markup(InlineKeyboardMarkup::new(vec![vec![]]))
+                .await?;
             }
         }
         _ => {}
