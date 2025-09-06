@@ -1,5 +1,5 @@
-pub(crate) mod db;
-pub(crate) mod config;
-pub(crate) mod handlers;
-pub mod loader;
+pub mod bot;
+pub mod config;
+pub mod core;
+pub mod errors;
 pub mod util;

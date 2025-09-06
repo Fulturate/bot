@@ -6,9 +6,10 @@ use std::{
 };
 
 use super::structs::WORD_VALUES;
-use crate::db::schemas::CurrenciesFunctions;
-use crate::db::schemas::group::Group;
-use crate::db::schemas::user::User;
+use crate::core::db::schemas::CurrenciesFunctions;
+use crate::core::db::schemas::group::Group;
+use crate::core::db::schemas::user::User;
+use crate::errors::MyError;
 use log::{debug, error, warn};
 use once_cell::sync::Lazy;
 use oximod::Model;
@@ -19,7 +20,6 @@ use teloxide::prelude::InlineQuery;
 use teloxide::types::Chat;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use crate::util::errors::MyError;
 
 const CACHE_DURATION_SECS: u64 = 60 * 10;
 pub const CURRENCY_CONFIG_PATH: &str = "currencies.json";

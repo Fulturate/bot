@@ -1,19 +1,19 @@
 use super::enums::AudioStruct;
 use crate::config::Config;
-use crate::util::errors::MyError;
+use crate::errors::MyError;
 use bytes::Bytes;
 use gem_rs::types::HarmBlockThreshold;
 use log::{debug, error, info};
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use teloxide::Bot;
 use teloxide::payloads::{EditMessageTextSetters, SendMessageSetters};
 use teloxide::requests::{Request as TeloxideRequest, Requester};
 use teloxide::types::{
     CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, MessageKind, ParseMode,
     ReplyParameters,
 };
-use teloxide::Bot;
 
 #[derive(Debug, Serialize, Deserialize, FromRedisValue, ToRedisArgs, Clone)]
 struct TranscriptionCache {

@@ -1,2 +1,2 @@
 pub mod converter;
-mod structs;
+pub mod structs;
