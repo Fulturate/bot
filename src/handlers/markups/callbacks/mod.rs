@@ -1,5 +1,5 @@
-pub mod module;
-pub mod whisper;
-pub mod translate;
+pub mod cobalt_pagination;
 pub mod delete;
-pub mod cobalter_pagination;
+pub mod module;
+pub mod translate;
+pub mod whisper;

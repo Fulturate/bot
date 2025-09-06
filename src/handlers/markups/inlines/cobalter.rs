@@ -1,17 +1,23 @@
 use crate::config::Config;
-use crate::db::schemas::settings::Settings;
 use crate::db::schemas::SettingsRepo;
-use crate::handlers::keyboards::make_photo_pagination_keyboard;
+use crate::db::schemas::settings::Settings;
+use crate::handlers::keyboards::{make_photo_pagination_keyboard, make_single_url_keyboard};
 use crate::util::errors::MyError;
 use ccobalt::model::request::{DownloadRequest, FilenameStyle, VideoQuality};
 use ccobalt::model::response::DownloadResponse;
+use log::info;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use teloxide::prelude::*;
-use teloxide::types::{ChosenInlineResult, InlineQuery, InlineQueryResult, InlineQueryResultArticle, InlineQueryResultPhoto, InputFile, InputMedia, InputMediaVideo, InputMessageContent, InputMessageContentText};
 use teloxide::Bot;
+use teloxide::prelude::*;
+use teloxide::types::{
+    ChosenInlineResult, InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+    InlineQueryResultArticle, InlineQueryResultPhoto, InlineQueryResultVideo, InputFile,
+    InputMedia, InputMediaVideo, InputMessageContent, InputMessageContentText,
+};
+use url::Url;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DownloadResult {
@@ -71,13 +77,23 @@ pub async fn resolve_download_url(
             }
             Ok(None)
         }
-        _ => {
-            if let Some(download_url) = response.get_download_url() {
-                Ok(Some(DownloadResult::Video(download_url)))
+        DownloadResponse::Tunnel { url, filename }
+        | DownloadResponse::Redirect { url, filename } => {
+            const PHOTO_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png", ".gif", ".webp"];
+            let is_photo = PHOTO_EXTENSIONS
+                .iter()
+                .any(|ext| filename.to_lowercase().ends_with(ext));
+
+            if is_photo {
+                Ok(Some(DownloadResult::Photos {
+                    urls: vec![url.clone()],
+                    original_url: url,
+                }))
             } else {
-                Ok(None)
+                Ok(Some(DownloadResult::Video(url)))
             }
         }
+        _ => Ok(response.get_download_url().map(DownloadResult::Video)),
     }
 }
 
@@ -95,15 +111,31 @@ fn build_results_from_media(
     user_id: u64,
 ) -> Vec<InlineQueryResult> {
     match media {
-        DownloadResult::Video(_) => {
-            let result_id = format!("cobalt_video:{}", url_hash);
-            let article = InlineQueryResultArticle::new(
-                result_id,
-                "Скачать видео",
-                InputMessageContent::Text(InputMessageContentText::new("⏳ Получение видео...")),
-            )
-                .description("Нажмите, чтобы отправить видео в чат");
-            vec![article.into()]
+        DownloadResult::Video(video_url) => {
+            if let Ok(url) = video_url.parse() {
+                let url_kb = make_single_url_keyboard(original_url);
+
+                let result = InlineQueryResultVideo::new(
+                    format!("cobalt_video:{}", url_hash),
+                    url,
+                    "video/mp4".parse().unwrap(),
+                    "https://i.imgur.com/D0A9Gxh.png".parse().unwrap(), /* preview */
+                    "Скачать видео".to_string(),
+                )
+                .reply_markup(url_kb);
+                vec![result.into()]
+            } else {
+                vec![
+                    InlineQueryResultArticle::new(
+                        format!("cobalt_video:{}", url_hash),
+                        "Видео не найдено",
+                        InputMessageContent::Text(InputMessageContentText::new(
+                            "❌ не удалось получить видео",
+                        )),
+                    )
+                    .into(),
+                ]
+            }
         }
         DownloadResult::Photos { urls, .. } => {
             let total = urls.len();
@@ -111,20 +143,24 @@ fn build_results_from_media(
                 .enumerate()
                 .filter_map(|(i, url_str)| {
                     if let (Ok(photo_url), Ok(thumb_url)) = (url_str.parse(), url_str.parse()) {
-                        let result_id = format!("{}_{}", original_url, i);
-                        let mut photo_result =
-                            InlineQueryResultPhoto::new(result_id, photo_url, thumb_url);
+                        let result_id = format!("{}_{}", url_hash, i);
 
-                        if total > 1 {
-                            let keyboard = make_photo_pagination_keyboard(
+                        let keyboard = if total > 1 {
+                            make_photo_pagination_keyboard(
                                 url_hash,
                                 i,
                                 total,
                                 user_id,
                                 original_url,
-                            );
-                            photo_result = photo_result.reply_markup(keyboard);
-                        }
+                            )
+                        } else {
+                            make_single_url_keyboard(original_url)
+                        };
+
+                        let photo_result =
+                            InlineQueryResultPhoto::new(result_id, photo_url, thumb_url)
+                                .reply_markup(keyboard);
+
                         Some(photo_result.into())
                     } else {
                         None
@@ -175,48 +211,50 @@ pub async fn handle_cobalt_inline(
                         "Failed to process link. Media not found or an error occurred.",
                     )),
                 )
-                    .description("Could not fetch media. Please try again later.");
+                .description("Could not fetch media. Please try again later.");
                 vec![error_article.into()]
             }
         }
     };
-    bot.answer_inline_query(q.id, results)
-        .cache_time(0)
-        .await?;
+    bot.answer_inline_query(q.id, results).cache_time(0).await?;
     Ok(())
 }
 
-pub async fn handle_chosen_inline_video(
-    bot: Bot,
-    chosen: ChosenInlineResult,
-    config: Arc<Config>,
-) -> Result<(), MyError> {
-    if let Some(inline_message_id) = chosen.inline_message_id {
-        if let Some(url_hash) = chosen.result_id.strip_prefix("cobalt_video:") {
-            let redis = config.get_redis_client();
-            let cache_key = format!("cobalt_cache:{}", url_hash);
-
-            if let Ok(Some(DownloadResult::Video(video_url))) =
-                redis.get::<DownloadResult>(&cache_key).await
-            {
-                let media = InputMedia::Video(InputMediaVideo::new(InputFile::url(video_url.parse()?)));
-                if let Err(e) = bot.edit_message_media_inline(&inline_message_id, media).await
-                {
-                    log::error!("Failed to edit message with video: {}", e);
-                    bot.edit_message_text_inline(
-                        inline_message_id,
-                        "Ошибка: не удалось отправить видео.",
-                    )
-                        .await?;
-                }
-            } else {
-                bot.edit_message_text_inline(
-                    inline_message_id,
-                    "Ошибка: видео не найдено в кэше или срок его хранения истёк.",
-                )
-                    .await?;
-            }
-        }
-    }
-    Ok(())
-}
+// completely useless
+// pub async fn handle_chosen_inline_video(
+//     bot: Bot,
+//     chosen: ChosenInlineResult,
+//     config: Arc<Config>,
+// ) -> Result<(), MyError> {
+//     if let Some(inline_message_id) = chosen.inline_message_id {
+//         if let Some(url_hash) = chosen.result_id.strip_prefix("cobalt_video:") {
+//             let redis = config.get_redis_client();
+//             let cache_key = format!("cobalt_cache:{}", url_hash);
+//
+//             if let Ok(Some(DownloadResult::Video(video_url))) =
+//                 redis.get::<DownloadResult>(&cache_key).await
+//             {
+//                 let media =
+//                     InputMedia::Video(InputMediaVideo::new(InputFile::url(video_url.parse()?)));
+//                 if let Err(e) = bot
+//                     .edit_message_media_inline(&inline_message_id, media)
+//                     .await
+//                 {
+//                     log::error!("Failed to edit message with video: {}", e);
+//                     bot.edit_message_text_inline(
+//                         inline_message_id,
+//                         "Ошибка: не удалось отправить видео.",
+//                     )
+//                     .await?;
+//                 }
+//             } else {
+//                 bot.edit_message_text_inline(
+//                     inline_message_id,
+//                     "Ошибка: видео не найдено в кэше или срок его хранения истёк.",
+//                 )
+//                 .await?;
+//             }
+//         }
+//     }
+//     Ok(())
+// }

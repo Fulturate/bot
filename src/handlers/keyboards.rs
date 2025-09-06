@@ -1,18 +1,11 @@
 use crate::db::schemas::settings::ModuleOption;
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
-pub fn make_single_download_keyboard(url: &str, format: &str) -> InlineKeyboardMarkup {
-    let button_text = if format == "audio" {
-        "Download as Audio"
-    } else {
-        "Download as Video"
-    };
-    let encoded_url = general_purpose::STANDARD.encode(url);
-    let callback_data = format!("download:{}:{}", format, encoded_url);
-    InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
-        button_text.to_string(),
-        callback_data,
+pub fn make_single_url_keyboard(url: &str) -> InlineKeyboardMarkup {
+    InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::url(
+        "URL",
+        url.parse().unwrap(),
     )]])
 }
 
@@ -28,29 +21,30 @@ pub fn make_photo_pagination_keyboard(
     if current_index > 0 {
         let prev_index = current_index - 1;
         let cb_data = format!(
-            "cobalt_page:{}:{}:{}:{}",
-            user_id, url_hash, prev_index, total_photos
+            "cobalt:{}:{}:{}:{}",
+            user_id, prev_index, total_photos, url_hash
         );
         row.push(InlineKeyboardButton::callback("⬅️", cb_data));
     }
 
-    row.push(InlineKeyboardButton::url("URL", original_url.to_string().parse().unwrap()));
-
     row.push(InlineKeyboardButton::callback(
         format!("{}/{}", current_index + 1, total_photos),
-        "cobalt_page:noop:0:0:0",
+        "cobalt:noop",
     ));
 
     if current_index + 1 < total_photos {
         let next_index = current_index + 1;
         let cb_data = format!(
-            "cobalt_page:{}:{}:{}:{}",
-            user_id, url_hash, next_index, total_photos
+            "cobalt:{}:{}:{}:{}",
+            user_id, next_index, total_photos, url_hash
         );
         row.push(InlineKeyboardButton::callback("➡️", cb_data));
     }
 
-    InlineKeyboardMarkup::new(vec![row])
+    InlineKeyboardMarkup::new(vec![row]).append_row(vec![InlineKeyboardButton::url(
+        "URL",
+        original_url.to_string().parse().unwrap(),
+    )])
 }
 
 pub fn make_option_selection_keyboard(
