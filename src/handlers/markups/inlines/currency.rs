@@ -1,17 +1,17 @@
-use crate::config::Config;
-use crate::db::schemas::user::User;
-use crate::util::errors::MyError;
+use crate::{config::Config, db::schemas::user::User, util::errors::MyError};
 use log::{debug, error};
 use mongodb::bson::doc;
 use oximod::Model;
 use std::sync::Arc;
-use teloxide::Bot;
-use teloxide::payloads::AnswerInlineQuerySetters;
-use teloxide::prelude::Requester;
-use teloxide::types::{
-    Chat, ChatId, ChatKind, ChatPrivate, InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery,
-    InlineQueryResult, InlineQueryResultArticle, InputMessageContent, InputMessageContentText, Me,
-    ParseMode,
+use teloxide::{
+    Bot,
+    payloads::AnswerInlineQuerySetters,
+    prelude::Requester,
+    types::{
+        Chat, ChatId, ChatKind, ChatPrivate, InlineKeyboardButton, InlineKeyboardMarkup,
+        InlineQuery, InlineQueryResult, InlineQueryResultArticle, InputMessageContent,
+        InputMessageContentText, Me, ParseMode,
+    },
 };
 use uuid::Uuid;
 

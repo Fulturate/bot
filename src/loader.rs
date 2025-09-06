@@ -1,36 +1,38 @@
-use crate::handlers::markups::inlines::cobalter::{handle_chosen_inline_video, handle_cobalt_inline, is_query_url};
-use crate::handlers::markups::inlines::currency::handle_currency_inline;
-use crate::handlers::markups::inlines::whisper::{handle_whisper_inline, is_whisper_query};
-use crate::handlers::messages::messager::{handle_currency, handle_speech};
-use crate::util::currency::converter::is_currency_query;
-use crate::util::inline::delete_message_button;
 use crate::{
     config::Config,
     handlers::{
-        commander::command_handlers, markups::markuper::callback_query_handlers,
-        messages::chat::handle_bot_added,
+        commander::command_handlers,
+        markups::inlines::{
+            cobalter::{handle_cobalt_inline, is_query_url},
+            currency::handle_currency_inline,
+            whisper::{handle_whisper_inline, is_whisper_query},
+        },
+        markups::markuper::callback_query_handlers,
+        messages::{
+            chat::handle_bot_added,
+            messager::{handle_currency, handle_speech},
+        },
     },
-    util::{enums::Command, errors::MyError},
+    util::{
+        currency::converter::is_currency_query, enums::Command, errors::MyError,
+        inline::delete_message_button,
+    },
 };
 use log::{error, info};
 use oximod::set_global_client;
-use std::convert::Infallible;
-use std::fmt::Write;
-use std::ops::ControlFlow;
-use std::sync::Arc;
-use teloxide::dispatching::MessageFilterExt;
-use teloxide::error_handlers::LoggingErrorHandler;
-use teloxide::payloads::SendDocumentSetters;
-use teloxide::prelude::{ChatId, Handler, Message, Requester};
-use teloxide::types::{Chat, InputFile, MessageId, ParseMode, ThreadId, User};
-use teloxide::update_listeners::Polling;
-use teloxide::utils::html;
+use std::{convert::Infallible, fmt::Write, ops::ControlFlow, sync::Arc};
 use teloxide::{
     Bot,
-    dispatching::{Dispatcher, DpHandlerDescription, HandlerExt, UpdateFilterExt},
+    dispatching::{
+        Dispatcher, DpHandlerDescription, HandlerExt, MessageFilterExt, UpdateFilterExt,
+    },
     dptree,
-    types::{Me, Update},
-    utils::command::BotCommands,
+    error_handlers::LoggingErrorHandler,
+    payloads::SendDocumentSetters,
+    prelude::{ChatId, Handler, Message, Requester},
+    types::{Chat, InputFile, Me, MessageId, ParseMode, ThreadId, Update, User},
+    update_listeners::Polling,
+    utils::{command::BotCommands, html},
 };
 
 async fn root_handler(
@@ -79,8 +81,7 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
         )
         .branch(Update::filter_callback_query().endpoint(callback_query_handlers))
         .branch(Update::filter_my_chat_member().endpoint(handle_bot_added))
-        .branch(Update::filter_inline_query().branch(inline_query_handler())
-        .branch(Update::filter_chosen_inline_result().endpoint(handle_chosen_inline_video)));
+        .branch(Update::filter_inline_query().branch(inline_query_handler()));
 
     let me = bot.get_me().await?;
     info!("Bot name: {:?}", me.username());
