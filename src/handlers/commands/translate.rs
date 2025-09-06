@@ -115,10 +115,7 @@ pub async fn translate_handler(
         .await
         .unwrap();
 
-    let response = format!(
-        "<blockquote>{}\n</blockquote>",
-        res,
-    );
+    let response = format!("<blockquote>{}\n</blockquote>", res,);
 
     let lang_display_name = SUPPORTED_LANGUAGES
         .iter()
@@ -126,10 +123,8 @@ pub async fn translate_handler(
         .map(|(_, name)| *name)
         .unwrap_or(&target_lang);
 
-    let switch_lang_button = InlineKeyboardButton::callback(
-        lang_display_name.to_string(),
-        "tr_show_langs".to_string(),
-    );
+    let switch_lang_button =
+        InlineKeyboardButton::callback(lang_display_name.to_string(), "tr_show_langs".to_string());
 
     let mut keyboard = delete_message_button(user.id.0);
     if let Some(first_row) = keyboard.inline_keyboard.get_mut(0) {
