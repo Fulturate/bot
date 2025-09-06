@@ -5,6 +5,7 @@ use teloxide::prelude::*;
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, Message, ParseMode, ReplyParameters,
 };
+use teloxide::utils::html::escape;
 use translators::{GoogleTranslator, Translator};
 
 pub const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
@@ -115,7 +116,7 @@ pub async fn translate_handler(
         .await
         .unwrap();
 
-    let response = format!("<blockquote>{}\n</blockquote>", res,);
+    let response = format!("<blockquote>{}\n</blockquote>", escape(&res));
 
     let lang_display_name = SUPPORTED_LANGUAGES
         .iter()

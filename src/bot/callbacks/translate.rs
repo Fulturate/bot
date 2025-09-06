@@ -10,6 +10,7 @@ use teloxide::prelude::Requester;
 use teloxide::types::{
     CallbackQuery, InlineKeyboardButton, MaybeInaccessibleMessage, Message, ParseMode,
 };
+use teloxide::utils::html::escape;
 use teloxide::{ApiError, RequestError};
 use translators::{GoogleTranslator, Translator};
 
@@ -75,7 +76,7 @@ async fn handle_language_selection(
                 message.id,
                 "Ошибка: не удалось найти исходное сообщение. Попробуйте снова.",
             )
-            .await?;
+                .await?;
             return Ok(());
         }
     };
@@ -88,7 +89,7 @@ async fn handle_language_selection(
                 message.id,
                 "В исходном сообщении нет текста для перевода.",
             )
-            .await?;
+                .await?;
             return Ok(());
         }
     };
@@ -107,7 +108,7 @@ async fn handle_language_selection(
         .await
         .unwrap();
 
-    let response = format!("<blockquote>{}\n</blockquote>", res,);
+    let response = format!("<blockquote>{}\n</blockquote>", escape(&res));
 
     let lang_display_name = SUPPORTED_LANGUAGES
         .iter()
