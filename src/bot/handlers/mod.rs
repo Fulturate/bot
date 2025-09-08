@@ -1,5 +1,5 @@
-pub mod commander;
-pub mod commands;
-pub mod keyboards;
-pub mod markups;
-pub mod messages;
+// pub mod commands;
+pub mod currency_settings;
+pub mod speech_recognition;
+pub mod start;
+pub mod translate;

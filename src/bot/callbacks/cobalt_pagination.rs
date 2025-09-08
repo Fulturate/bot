@@ -1,4 +1,4 @@
-use crate::bot::handlers::keyboards::make_photo_pagination_keyboard;
+use crate::bot::keyboards::cobalt::make_photo_pagination_keyboard;
 use crate::bot::inlines::cobalter::DownloadResult;
 use crate::config::Config;
 use crate::errors::MyError;

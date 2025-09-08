@@ -1,5 +1,5 @@
-use crate::bot::handlers::commands::settings::update_settings_message;
-use crate::bot::handlers::keyboards::make_option_selection_keyboard;
+use crate::bot::handlers::currency_settings::update_settings_message;
+use crate::bot::keyboards::cobalt::make_option_selection_keyboard;
 use crate::core::db::schemas::SettingsRepo;
 use crate::core::db::schemas::settings::Settings;
 use crate::errors::MyError;

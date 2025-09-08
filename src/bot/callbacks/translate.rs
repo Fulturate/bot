@@ -1,7 +1,6 @@
-use crate::bot::handlers::commands::translate::{
-    SUPPORTED_LANGUAGES, create_language_keyboard, normalize_language_code,
-};
+use crate::bot::keyboards::translate::create_language_keyboard;
 use crate::config::Config;
+use crate::core::services::translation::{SUPPORTED_LANGUAGES, normalize_language_code};
 use crate::errors::MyError;
 use crate::util::inline::delete_message_button;
 use teloxide::Bot;
@@ -76,7 +75,7 @@ async fn handle_language_selection(
                 message.id,
                 "Ошибка: не удалось найти исходное сообщение. Попробуйте снова.",
             )
-                .await?;
+            .await?;
             return Ok(());
         }
     };
@@ -89,7 +88,7 @@ async fn handle_language_selection(
                 message.id,
                 "В исходном сообщении нет текста для перевода.",
             )
-                .await?;
+            .await?;
             return Ok(());
         }
     };

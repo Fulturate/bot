@@ -1,4 +1,4 @@
-use crate::bot::handlers::messages::sounder::sound_handlers;
+use crate::bot::messages::sounder::sound_handlers;
 use crate::config::Config;
 use crate::errors::MyError;
 use crate::util::inline::delete_message_button;

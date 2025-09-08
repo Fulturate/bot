@@ -1,9 +1,9 @@
-use crate::bot::handlers::commands::settings::{
+use crate::bot::handlers::currency_settings::{
     currency_codes_handler, currency_codes_list_handler, settings_command_handler,
 };
-use crate::bot::handlers::commands::speech_recognition::speech_recognition_handler;
-use crate::bot::handlers::commands::start::start_handler;
-use crate::bot::handlers::commands::translate::translate_handler;
+use crate::bot::handlers::speech_recognition::speech_recognition_handler;
+use crate::bot::handlers::start::start_handler;
+use crate::bot::handlers::translate::translate_handler;
 use crate::config::Config;
 use crate::errors::MyError;
 use crate::util::enums::Command;

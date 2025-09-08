@@ -1,5 +1,5 @@
-use crate::bot::handlers::messages::sound::voice::voice_handler;
-use crate::bot::handlers::messages::sound::voice_note::voice_note_handler;
+use crate::bot::messages::sound::voice::voice_handler;
+use crate::bot::messages::sound::voice_note::voice_note_handler;
 use crate::config::Config;
 use crate::errors::MyError;
 use teloxide::Bot;

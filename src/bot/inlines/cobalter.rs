@@ -1,4 +1,4 @@
-use crate::bot::handlers::keyboards::{make_photo_pagination_keyboard, make_single_url_keyboard};
+use crate::bot::keyboards::cobalt::{make_photo_pagination_keyboard, make_single_url_keyboard};
 use crate::config::Config;
 use crate::core::db::schemas::SettingsRepo;
 use crate::core::db::schemas::settings::Settings;
@@ -12,8 +12,8 @@ use std::sync::Arc;
 use teloxide::Bot;
 use teloxide::prelude::*;
 use teloxide::types::{
-    InlineQuery, InlineQueryResult,
-    InlineQueryResultArticle, InlineQueryResultPhoto, InlineQueryResultVideo, InputMessageContent, InputMessageContentText,
+    InlineQuery, InlineQueryResult, InlineQueryResultArticle, InlineQueryResultPhoto,
+    InlineQueryResultVideo, InputMessageContent, InputMessageContentText,
 };
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
