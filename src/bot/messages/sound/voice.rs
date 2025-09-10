@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use crate::util::transcription::transcription_handler;
 use teloxide::prelude::*;

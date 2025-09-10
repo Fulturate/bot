@@ -10,7 +10,7 @@ use teloxide::types::{
 };
 use uuid::Uuid;
 
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use log::error;
 use teloxide::utils::html;

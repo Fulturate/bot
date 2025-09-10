@@ -1,6 +1,6 @@
 use crate::bot::messages::sound::voice::voice_handler;
 use crate::bot::messages::sound::voice_note::voice_note_handler;
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use teloxide::Bot;
 use teloxide::prelude::Message;

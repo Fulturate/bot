@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::core::db::schemas::SettingsRepo;
 use crate::core::db::schemas::group::Group;
 use crate::core::db::schemas::settings::Settings;

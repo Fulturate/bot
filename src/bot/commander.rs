@@ -1,10 +1,10 @@
-use crate::bot::handlers::currency_settings::{
+use crate::bot::commands::currency_settings::{
     currency_codes_handler, currency_codes_list_handler, settings_command_handler,
 };
-use crate::bot::handlers::speech_recognition::speech_recognition_handler;
-use crate::bot::handlers::start::start_handler;
-use crate::bot::handlers::translate::translate_handler;
-use crate::config::Config;
+use crate::bot::commands::speech_recognition::speech_recognition_handler;
+use crate::bot::commands::start::start_handler;
+use crate::bot::commands::translate::translate_handler;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use crate::util::enums::Command;
 use teloxide::Bot;

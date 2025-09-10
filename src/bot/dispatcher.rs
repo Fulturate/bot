@@ -1,11 +1,11 @@
 use crate::bot::callbacks::callback_query_handlers;
-use crate::bot::commands::command_handlers;
+use crate::bot::commander::command_handlers;
 use crate::bot::messages::chat::handle_bot_added;
-use crate::bot::messages::messager::{handle_currency, handle_speech};
+use crate::bot::messager::{handle_currency, handle_speech};
 use crate::bot::inlines::cobalter::{handle_cobalt_inline, is_query_url};
 use crate::bot::inlines::currency::handle_currency_inline;
 use crate::bot::inlines::whisper::{handle_whisper_inline, is_whisper_query};
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use crate::util::currency::converter::is_currency_query;
 use crate::util::enums::Command;

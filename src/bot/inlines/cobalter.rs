@@ -1,5 +1,5 @@
 use crate::bot::keyboards::cobalt::{make_photo_pagination_keyboard, make_single_url_keyboard};
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::core::db::schemas::SettingsRepo;
 use crate::core::db::schemas::settings::Settings;
 use crate::errors::MyError;

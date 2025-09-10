@@ -1,6 +1,6 @@
 use crate::bot::keyboards::cobalt::make_photo_pagination_keyboard;
 use crate::bot::inlines::cobalter::DownloadResult;
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use std::sync::Arc;
 use teloxide::prelude::*;

@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::core::db::schemas::user::User;
 use crate::errors::MyError;
 use log::{debug, error};

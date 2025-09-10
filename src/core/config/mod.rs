@@ -77,7 +77,7 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.to_string());
 
-        let Ok(json_config) = read_json_config("config.json") else {
+        let Ok(json_config) = read_json_config("config.json") else { // todo: remove JsonConfig because useless when we will get /settings
             error!("Unable to read config.json");
             std::process::exit(1);
         };

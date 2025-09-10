@@ -1,5 +1,5 @@
 use super::enums::AudioStruct;
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use bytes::Bytes;
 use gem_rs::types::HarmBlockThreshold;

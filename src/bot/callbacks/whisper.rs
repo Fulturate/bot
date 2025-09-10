@@ -1,5 +1,5 @@
 use crate::bot::inlines::whisper::Whisper;
-use crate::config::Config;
+use crate::core::config::Config;
 use crate::errors::MyError;
 use teloxide::Bot;
 use teloxide::payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters};
