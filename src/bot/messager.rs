@@ -1,13 +1,13 @@
 use crate::bot::messages::sounder::sound_handlers;
 use crate::core::config::Config;
 use crate::errors::MyError;
-use crate::util::inline::delete_message_button;
 use log::error;
 use teloxide::Bot;
 use teloxide::payloads::SendMessageSetters;
 use teloxide::requests::Requester;
 use teloxide::types::{Message, ParseMode, ReplyParameters};
 use tokio::task;
+use crate::bot::keyboards::delete::delete_message_button;
 
 pub async fn handle_speech(bot: Bot, message: Message) -> Result<(), MyError> {
     let config = Config::new().await;

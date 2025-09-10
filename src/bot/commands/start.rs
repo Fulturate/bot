@@ -1,7 +1,7 @@
 use crate::core::config::Config;
 use crate::core::db::schemas::user::User;
 use crate::errors::MyError;
-use crate::util::currency::converter::get_default_currencies;
+use crate::core::services::currency::converter::get_default_currencies;
 use log::error;
 use mongodb::bson::doc;
 use oximod::Model;

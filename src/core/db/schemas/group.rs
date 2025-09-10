@@ -1,5 +1,5 @@
 use crate::core::db::schemas::{BaseFunctions, CurrenciesFunctions};
-use crate::util::currency::converter::CurrencyStruct;
+use crate::core::services::currency::converter::CurrencyStruct;
 use async_trait::async_trait;
 use mongodb::bson;
 use mongodb::bson::{doc, oid::ObjectId};

@@ -7,9 +7,8 @@ use crate::bot::inlines::currency::handle_currency_inline;
 use crate::bot::inlines::whisper::{handle_whisper_inline, is_whisper_query};
 use crate::core::config::Config;
 use crate::errors::MyError;
-use crate::util::currency::converter::is_currency_query;
 use crate::util::enums::Command;
-use crate::util::inline::delete_message_button;
+use crate::bot::keyboards::delete::delete_message_button;
 use log::{error, info};
 use oximod::set_global_client;
 use std::{convert::Infallible, fmt::Write, ops::ControlFlow, sync::Arc};
@@ -26,6 +25,7 @@ use teloxide::{
     update_listeners::Polling,
     utils::{command::BotCommands, html},
 };
+use crate::core::services::currency::converter::is_currency_query;
 
 async fn root_handler(
     update: Update,

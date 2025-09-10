@@ -1,4 +1,3 @@
-use super::enums::AudioStruct;
 use crate::core::config::Config;
 use crate::errors::MyError;
 use bytes::Bytes;
@@ -14,6 +13,7 @@ use teloxide::types::{
     CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, MessageKind, ParseMode,
     ReplyParameters,
 };
+use crate::util::enums::AudioStruct;
 
 #[derive(Debug, Serialize, Deserialize, FromRedisValue, ToRedisArgs, Clone)]
 struct TranscriptionCache {

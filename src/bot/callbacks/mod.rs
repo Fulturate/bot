@@ -8,10 +8,10 @@ use crate::bot::callbacks::translate::handle_translate_callback;
 use crate::bot::callbacks::whisper::handle_whisper_callback;
 use crate::core::config::Config;
 use crate::errors::MyError;
-use crate::util::transcription::{back_handler, summarization_handler};
 use std::sync::Arc;
 use teloxide::Bot;
 use teloxide::prelude::{CallbackQuery, Requester};
+use crate::core::services::transcription::{back_handler, summarization_handler};
 
 pub mod cobalt_pagination;
 pub mod delete;

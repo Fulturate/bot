@@ -1,6 +1,6 @@
 use crate::core::config::Config;
 use crate::errors::MyError;
-use crate::util::transcription::transcription_handler;
+use crate::core::services::transcription::transcription_handler;
 use teloxide::prelude::*;
 
 pub async fn voice_note_handler(bot: Bot, msg: Message, config: &Config) -> Result<(), MyError> {

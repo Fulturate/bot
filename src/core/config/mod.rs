@@ -1,11 +1,13 @@
+mod json;
+
 use crate::core::db::redis::RedisCache;
-use crate::util::currency::converter::{CurrencyConverter, OutputLanguage};
-use crate::util::json::{JsonConfig, read_json_config};
+use crate::core::services::currency::converter::{CurrencyConverter, OutputLanguage};
 use dotenv::dotenv;
 use log::error;
 use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
+use crate::core::config::json::{read_json_config, JsonConfig};
 
 #[derive(Clone)]
 pub struct Config {

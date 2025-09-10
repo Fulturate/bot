@@ -3,14 +3,14 @@ use crate::core::db::schemas::SettingsRepo;
 use crate::core::db::schemas::group::Group;
 use crate::core::db::schemas::settings::Settings;
 use crate::core::db::schemas::user::User;
-use crate::core::services::currency::{get_enabled_codes, handle_currency_update};
 use crate::errors::MyError;
-use crate::util::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes};
+use crate::core::services::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes};
 use teloxide::prelude::*;
 use teloxide::types::{
     InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage, ParseMode,
     ReplyParameters,
 };
+use crate::core::services::currencier::{get_enabled_codes, handle_currency_update};
 
 pub async fn currency_codes_handler(bot: Bot, msg: Message, code: String) -> Result<(), MyError> {
     if msg.chat.is_private() {

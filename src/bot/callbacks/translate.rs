@@ -2,7 +2,7 @@ use crate::bot::keyboards::translate::create_language_keyboard;
 use crate::core::config::Config;
 use crate::core::services::translation::{SUPPORTED_LANGUAGES, normalize_language_code};
 use crate::errors::MyError;
-use crate::util::inline::delete_message_button;
+use crate::bot::keyboards::delete::delete_message_button;
 use teloxide::Bot;
 use teloxide::payloads::{EditMessageReplyMarkupSetters, EditMessageTextSetters};
 use teloxide::prelude::Requester;

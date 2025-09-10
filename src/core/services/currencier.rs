@@ -3,7 +3,7 @@ use crate::core::db::schemas::group::Group;
 use crate::core::db::schemas::user::User;
 use crate::core::db::schemas::{BaseFunctions, CurrenciesFunctions};
 use crate::errors::MyError;
-use crate::util::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes};
+use crate::core::services::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes};
 use log::error;
 use oximod::Model;
 use std::collections::HashSet;

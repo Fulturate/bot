@@ -4,7 +4,7 @@ pub mod user;
 
 use crate::core::db::schemas::settings::ModuleSettings;
 use crate::errors::MyError;
-use crate::util::currency::converter::CurrencyStruct;
+use crate::core::services::currency::converter::CurrencyStruct;
 use async_trait::async_trait;
 use mongodb::results::UpdateResult;
 use oximod::_error::oximod_error::OxiModError;
