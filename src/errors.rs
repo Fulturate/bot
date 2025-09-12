@@ -54,6 +54,9 @@ pub enum MyError {
 
     #[error("UTF-8 conversion error: {0}")]
     Utf8(#[from] FromUtf8Error),
+
+    #[error("Serde json error: {0}")]
+    SerdeJson(#[from] serde_json::Error),
 }
 
 impl From<&str> for MyError {
