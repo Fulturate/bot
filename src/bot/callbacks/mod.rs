@@ -1,24 +1,26 @@
 use crate::bot::callbacks::cobalt_pagination::handle_cobalt_pagination;
-use crate::bot::callbacks::delete::delete_message_handler;
+use crate::bot::callbacks::delete::{handle_delete_confirmation, handle_delete_request};
 use crate::bot::callbacks::module::{
     module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler,
     settings_set_handler,
+};
+use crate::bot::callbacks::transcription::{
+    back_handler, pagination_handler, summarization_handler,
 };
 use crate::bot::callbacks::translate::handle_translate_callback;
 use crate::bot::callbacks::whisper::handle_whisper_callback;
 use crate::core::config::Config;
 use crate::errors::MyError;
 use std::sync::Arc;
-use teloxide::Bot;
 use teloxide::prelude::{CallbackQuery, Requester};
-use crate::bot::callbacks::transcription::{back_handler, pagination_handler, summarization_handler};
+use teloxide::Bot;
 
 pub mod cobalt_pagination;
 pub mod delete;
 pub mod module;
+pub mod transcription;
 pub mod translate;
 pub mod whisper;
-pub mod transcription;
 
 pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
@@ -26,8 +28,10 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
     if let Some(data) = &q.data {
         if data.starts_with("settings_set:") {
             settings_set_handler(bot, q).await?
-        } else if data.starts_with("delete_msg") {
-            delete_message_handler(bot, q).await?
+        } else if data.starts_with("delete_msg:") {
+            handle_delete_request(bot, q).await?
+        } else if data.starts_with("delete_confirm:") {
+            handle_delete_confirmation(bot, q, &config).await?
         } else if data.starts_with("summarize") {
             summarization_handler(bot, q, &config).await?
         } else if data.starts_with("back_to_full") {
