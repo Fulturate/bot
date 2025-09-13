@@ -1,40 +1,46 @@
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
+pub const TRANSCRIPTION_MODULE_KEY: &str = "transcription";
+
 pub fn create_transcription_keyboard(
-    page: usize,
+    current_page: usize,
     total_pages: usize,
     user_id: u64,
 ) -> InlineKeyboardMarkup {
-    let mut row = vec![];
+    let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![];
 
-    if page > 1 {
-        row.push(InlineKeyboardButton::callback(
+    let mut nav_row = Vec::new();
+
+    if current_page > 0 {
+        nav_row.push(InlineKeyboardButton::callback(
             "⬅️",
-            format!("paginate:{}:{}:{}", page - 1, total_pages, user_id),
+            format!("{}:page:{}", TRANSCRIPTION_MODULE_KEY, current_page - 1),
         ));
     }
 
-    row.push(InlineKeyboardButton::callback(
-        format!("📄 {}/{}", page, total_pages),
+    nav_row.push(InlineKeyboardButton::callback(
+        format!("📄 {}/{}", current_page + 1, total_pages),
         "noop",
     ));
 
-    if page < total_pages {
-        row.push(InlineKeyboardButton::callback(
+    if current_page + 1 < total_pages {
+        nav_row.push(InlineKeyboardButton::callback(
             "➡️",
-            format!("paginate:{}:{}:{}", page + 1, total_pages, user_id),
+            format!("{}:page:{}", TRANSCRIPTION_MODULE_KEY, current_page + 1),
         ));
     }
 
-    let summary_button = InlineKeyboardButton::callback("✨", "summarize");
-    let delete_button =
-        InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", user_id));
-
     if total_pages > 1 {
-        InlineKeyboardMarkup::new(vec![row, vec![summary_button, delete_button]])
-    } else {
-        InlineKeyboardMarkup::new(vec![vec![summary_button, delete_button]])
+        keyboard.push(nav_row);
     }
+
+    let action_row = vec![
+        InlineKeyboardButton::callback("✨", "summarize"),
+        InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", user_id)),
+    ];
+    keyboard.push(action_row);
+
+    InlineKeyboardMarkup::new(keyboard)
 }
 
 pub fn create_summary_keyboard() -> InlineKeyboardMarkup {

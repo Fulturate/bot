@@ -36,7 +36,7 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
             summarization_handler(bot, q, &config).await?
         } else if data.starts_with("back_to_full") {
             back_handler(bot, q, &config).await?
-        } else if data.starts_with("paginate:") {
+        } else if data.starts_with("transcription:page:") {
             pagination_handler(bot, q, &config).await?
         } else if data.starts_with("module_select:") {
             module_select_handler(bot, q).await?

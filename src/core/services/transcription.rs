@@ -3,9 +3,9 @@ use crate::core::config::Config;
 use crate::errors::MyError;
 use crate::util::enums::AudioStruct;
 use bytes::Bytes;
-use gem_rs::types::{HarmBlockThreshold, Context, Role, Settings, Blob};
-use gem_rs::client::GemSession;
 use gem_rs::api::Models;
+use gem_rs::client::GemSession;
+use gem_rs::types::{Blob, Context, HarmBlockThreshold, Role, Settings};
 use log::{debug, error, info};
 use redis_macros::{FromRedisValue, ToRedisArgs};
 use serde::{Deserialize, Serialize};
@@ -55,9 +55,7 @@ async fn get_cached(
         mime_type: file.mime_type.clone(),
     };
 
-    cache
-        .set(&file_cache_key, &new_cache_entry, 86400)
-        .await?;
+    cache.set(&file_cache_key, &new_cache_entry, 86400).await?;
     debug!(
         "Saved new transcription to file cache for unique_id: {}",
         file.file_id
@@ -75,7 +73,7 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
         .ok();
 
     let Some(message) = message else { return Ok(()) };
-    let Some(user) = msg.clone().from else {
+    let Some(user) = msg.from.as_ref() else {
         bot.edit_message_text(message.chat.id, message.id, "Не удалось определить пользователя.").await?;
         return Ok(());
     };
@@ -91,11 +89,12 @@ pub async fn transcription_handler(bot: Bot, msg: Message, config: &Config) -> R
 
                 let text_parts = split_text(&cache_entry.full_text, 4000);
                 if text_parts.is_empty() {
-                    bot.edit_message_text(message.chat.id, message.id, "❌ Получен пустой текст.").await?;
+                    bot.edit_message_text(message.chat.id, message.id, "❌ Получен пустой текст.")
+                        .await?;
                     return Ok(());
                 }
 
-                let keyboard = create_transcription_keyboard(1, text_parts.len(), user.id.0);
+                let keyboard = create_transcription_keyboard(0, text_parts.len(), user.id.0);
                 bot.edit_message_text(
                     msg.chat.id,
                     message.id,
@@ -229,11 +228,7 @@ impl Transcription {
 
         while attempts < 3 {
             match client
-                .send_blob(
-                    Blob::new(&self.mime_type, &self.data),
-                    Role::User,
-                    &settings,
-                )
+                .send_blob(Blob::new(&self.mime_type, &self.data), Role::User, &settings)
                 .await
             {
                 Ok(response) => {
@@ -247,7 +242,9 @@ impl Transcription {
                 Err(error) => {
                     attempts += 1;
                     let error_string = error.to_string();
-                    if error_string == last_error { continue; }
+                    if error_string == last_error {
+                        continue;
+                    }
                     last_error = error_string;
                     error!("Transcription error (attempt {}): {:?}", attempts, error);
                 }
@@ -258,7 +255,9 @@ impl Transcription {
 }
 
 pub fn split_text(text: &str, chunk_size: usize) -> Vec<String> {
-    if text.is_empty() { return vec![]; }
+    if text.is_empty() {
+        return vec![];
+    }
     text.chars()
         .collect::<Vec<_>>()
         .chunks(chunk_size)
