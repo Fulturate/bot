@@ -11,13 +11,14 @@ use crate::errors::MyError;
 use std::sync::Arc;
 use teloxide::Bot;
 use teloxide::prelude::{CallbackQuery, Requester};
-use crate::core::services::transcription::{back_handler, summarization_handler};
+use crate::bot::callbacks::transcription::{back_handler, pagination_handler, summarization_handler};
 
 pub mod cobalt_pagination;
 pub mod delete;
 pub mod module;
 pub mod translate;
 pub mod whisper;
+pub mod transcription;
 
 pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
@@ -31,6 +32,8 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
             summarization_handler(bot, q, &config).await?
         } else if data.starts_with("back_to_full") {
             back_handler(bot, q, &config).await?
+        } else if data.starts_with("paginate:") {
+            pagination_handler(bot, q, &config).await?
         } else if data.starts_with("module_select:") {
             module_select_handler(bot, q).await?
         } else if data.starts_with("module_toggle") {
