@@ -1,58 +1,185 @@
-use crate::bot::callbacks::cobalt_pagination::handle_cobalt_pagination;
-use crate::bot::callbacks::delete::{handle_delete_confirmation, handle_delete_request};
-use crate::bot::callbacks::module::{
-    module_option_handler, module_select_handler, module_toggle_handler, settings_back_handler,
-    settings_set_handler,
+use crate::{
+    bot::{
+        callbacks::{
+            cobalt_pagination::handle_cobalt_pagination,
+            delete::{handle_delete_confirmation, handle_delete_request},
+            translate::handle_translate_callback,
+            whisper::handle_whisper_callback,
+        },
+        commands::settings::update_settings_message,
+        modules::{Owner, registry::MOD_MANAGER},
+    },
+    core::{
+        config::Config,
+        services::speech_recognition::{back_handler, pagination_handler, summarization_handler},
+    },
+    errors::MyError,
 };
-use crate::bot::callbacks::transcription::{
-    back_handler, pagination_handler, summarization_handler,
-};
-use crate::bot::callbacks::translate::handle_translate_callback;
-use crate::bot::callbacks::whisper::handle_whisper_callback;
-use crate::core::config::Config;
-use crate::errors::MyError;
 use std::sync::Arc;
-use teloxide::prelude::{CallbackQuery, Requester};
-use teloxide::Bot;
+use teloxide::{
+    Bot,
+    payloads::EditMessageTextSetters,
+    prelude::{CallbackQuery, Requester},
+};
 
 pub mod cobalt_pagination;
 pub mod delete;
-pub mod module;
-pub mod transcription;
 pub mod translate;
 pub mod whisper;
+
+enum CallbackAction<'a> {
+    ModuleSettings {
+        module_key: &'a str,
+        rest: &'a str,
+    },
+    ModuleSelect {
+        owner_type: &'a str,
+        owner_id: &'a str,
+        module_key: &'a str,
+    },
+    SettingsBack {
+        owner_type: &'a str,
+        owner_id: &'a str,
+    },
+    CobaltPagination,
+    DeleteMessage,
+    DeleteConfirmation,
+    Summarize,
+    SpeechPage,
+    BackToFull,
+    Whisper,
+    Translate,
+    NoOp,
+}
+
+fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
+    if data == "noop" {
+        return Some(CallbackAction::NoOp);
+    }
+
+    if let Some(rest) = data.strip_prefix("module_select:") {
+        let parts: Vec<_> = rest.split(':').collect();
+        if parts.len() == 3 {
+            return Some(CallbackAction::ModuleSelect {
+                owner_type: parts[0],
+                owner_id: parts[1],
+                module_key: parts[2],
+            });
+        }
+    }
+
+    if let Some(rest) = data.strip_prefix("settings_back:") {
+        let parts: Vec<_> = rest.split(':').collect();
+        if parts.len() == 2 {
+            return Some(CallbackAction::SettingsBack {
+                owner_type: parts[0],
+                owner_id: parts[1],
+            });
+        }
+    }
+
+    if let Some(module_key) = MOD_MANAGER.get_all_modules().iter().find_map(|m| {
+        data.starts_with(&format!("{}:settings:", m.key()))
+            .then_some(m.key())
+    }) {
+        let rest = data
+            .strip_prefix(&format!("{}:settings:", module_key))
+            .unwrap_or("");
+        return Some(CallbackAction::ModuleSettings { module_key, rest });
+    }
+
+    if data.starts_with("delete_msg") {
+        return Some(CallbackAction::DeleteMessage);
+    }
+    if data.starts_with("delete_confirmation:") {
+        return Some(CallbackAction::DeleteConfirmation);
+    }
+    if data.starts_with("summarize") {
+        return Some(CallbackAction::Summarize);
+    }
+    if data.starts_with("speech:page:") {
+        return Some(CallbackAction::SpeechPage);
+    }
+    if data.starts_with("back_to_full") {
+        return Some(CallbackAction::BackToFull);
+    }
+    if data.starts_with("whisper") {
+        return Some(CallbackAction::Whisper);
+    }
+    if data.starts_with("tr_") {
+        return Some(CallbackAction::Translate);
+    }
+    if data.starts_with("cobalt:") {
+        return Some(CallbackAction::CobaltPagination);
+    }
+
+    None
+}
 
 pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
 
-    if let Some(data) = &q.data {
-        if data.starts_with("settings_set:") {
-            settings_set_handler(bot, q).await?
-        } else if data.starts_with("delete_msg:") {
-            handle_delete_request(bot, q).await?
-        } else if data.starts_with("delete_confirm:") {
+    let Some(data) = &q.data else {
+        return Ok(());
+    };
+
+    match parse_callback_data(data) {
+        Some(CallbackAction::ModuleSelect {
+            owner_type,
+            owner_id,
+            module_key,
+        }) => {
+            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message)
+            {
+                let owner = Owner {
+                    id: owner_id.to_string(),
+                    r#type: owner_type.to_string(),
+                };
+                let (text, keyboard) = module.get_settings_ui(&owner).await?;
+                bot.edit_message_text(message.chat().id, message.id(), text)
+                    .reply_markup(keyboard)
+                    .await?;
+            }
+        }
+        Some(CallbackAction::SettingsBack {
+            owner_type,
+            owner_id,
+        }) => {
+            if let Some(message) = q.message {
+                update_settings_message(bot, message, owner_id.to_string(), owner_type.to_string())
+                    .await?;
+            }
+        }
+        Some(CallbackAction::ModuleSettings { module_key, rest }) => {
+            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message)
+            {
+                let owner = Owner {
+                    id: message.chat().id.to_string(),
+                    r#type: (if message.chat().is_private() {
+                        "user"
+                    } else {
+                        "group"
+                    })
+                    .to_string(),
+                };
+                module.handle_callback(bot, &q, &owner, rest).await?;
+            }
+        }
+        Some(CallbackAction::CobaltPagination) => handle_cobalt_pagination(bot, q, config).await?,
+        Some(CallbackAction::DeleteMessage) => handle_delete_request(bot, q).await?,
+        Some(CallbackAction::DeleteConfirmation) => {
             handle_delete_confirmation(bot, q, &config).await?
-        } else if data.starts_with("summarize") {
-            summarization_handler(bot, q, &config).await?
-        } else if data.starts_with("back_to_full") {
-            back_handler(bot, q, &config).await?
-        } else if data.starts_with("transcription:page:") {
-            pagination_handler(bot, q, &config).await?
-        } else if data.starts_with("module_select:") {
-            module_select_handler(bot, q).await?
-        } else if data.starts_with("module_toggle") {
-            module_toggle_handler(bot, q).await?
-        } else if data.starts_with("module_opt:") {
-            module_option_handler(bot, q).await?
-        } else if data.starts_with("settings_back:") {
-            settings_back_handler(bot, q).await?
-        } else if data.starts_with("whisper") {
-            handle_whisper_callback(bot, q, &config).await?
-        } else if data.starts_with("tr_") {
-            handle_translate_callback(bot, q, &config).await?
-        } else if data.starts_with("cobalt:") {
-            handle_cobalt_pagination(bot, q, config).await?
-        } else {
+        }
+        Some(CallbackAction::Summarize) => summarization_handler(bot, q, &config).await?,
+        Some(CallbackAction::SpeechPage) => pagination_handler(bot, q, &config).await?,
+        Some(CallbackAction::BackToFull) => back_handler(bot, q, &config).await?,
+        Some(CallbackAction::Whisper) => handle_whisper_callback(bot, q, &config).await?,
+        Some(CallbackAction::Translate) => handle_translate_callback(bot, q, &config).await?,
+        Some(CallbackAction::NoOp) => {
+            bot.answer_callback_query(q.id).await?;
+        }
+        None => {
+            log::warn!("Unhandled callback query data: {}", data);
             bot.answer_callback_query(q.id).await?;
         }
     }
