@@ -2,8 +2,6 @@ pub mod group;
 pub mod settings;
 pub mod user;
 
-use crate::core::db::schemas::settings::ModuleSettings;
-use crate::errors::MyError;
 use crate::core::services::currency::converter::CurrencyStruct;
 use async_trait::async_trait;
 use mongodb::results::UpdateResult;
@@ -22,23 +20,4 @@ pub trait CurrenciesFunctions: Sized {
     async fn add_currency(id: &str, currency: &CurrencyStruct)
     -> Result<UpdateResult, OxiModError>;
     async fn remove_currency(id: &str, currency: &str) -> Result<UpdateResult, OxiModError>;
-}
-
-#[async_trait]
-pub trait SettingsRepo {
-    async fn get_or_create(owner_id: &str, owner_type: &str) -> Result<Self, MyError>
-    where
-        Self: Sized;
-
-    async fn update_module<F>(
-        owner_id: &str,
-        owner_type: &str,
-        module_key: &str,
-        modifier: F,
-    ) -> Result<Self, MyError>
-    where
-        Self: Sized,
-        F: FnOnce(&mut ModuleSettings) + Send;
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleSettings>;
 }

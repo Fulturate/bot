@@ -1,10 +1,17 @@
-use crate::core::db::schemas::SettingsRepo;
-use crate::errors::MyError;
-use async_trait::async_trait;
-use mongodb::bson;
-use mongodb::bson::{doc, oid::ObjectId};
-use oximod::{Model, ModelTrait};
+use crate::{
+    bot::modules::{ModuleSettings, Owner},
+    errors::MyError,
+};
+use mongodb::{
+    bson,
+    bson::{doc, oid::ObjectId},
+};
+
+use crate::bot::modules::registry::MOD_MANAGER;
+use oximod::Model;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Model)]
 #[db("fulturate")]
@@ -15,135 +22,95 @@ pub struct Settings {
 
     #[index(unique, name = "owner")]
     pub owner_id: String,
-
     pub owner_type: String,
 
     #[serde(default)]
-    pub modules: Vec<ModuleSettings>,
+    pub modules: BTreeMap<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModuleSettings {
-    pub key: String,   // уникальный ключ модуля, например "currency" или "speech_recog"
-    pub enabled: bool, // включен или нет
-    pub description: String, // описание модуля
-    #[serde(default)] // тут ещё было бы неплохо добавить лимиты, по типу максимум и какой сейчас,
-    // но мне че то лень это продумывать
-    pub options: Vec<ModuleOption>,
-}
+impl Settings {
+    pub async fn create_with_defaults(owner: &Owner) -> Result<Self, MyError> {
+        let mut modules_map = BTreeMap::<String, Value>::new();
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ModuleOption {
-    pub key: String,
-    pub value: String,
-}
+        for module in MOD_MANAGER.get_all_modules() {
+            if module.enabled_for(&owner.r#type) {
+                match module.factory_settings() {
+                    Ok(settings_json) => {
+                        modules_map.insert(module.key().to_string(), settings_json);
+                    }
+                    Err(e) => log::error!(
+                        "Failed to get default settings for module '{}': {}",
+                        module.key(),
+                        e
+                    ),
+                }
+            }
+        }
 
-#[async_trait]
-impl SettingsRepo for Settings {
-    async fn get_or_create(owner_id: &str, owner_type: &str) -> Result<Self, MyError> {
+        let new_doc = Settings::new()
+            .owner_id(owner.id.clone())
+            .owner_type(owner.r#type.clone())
+            .modules(modules_map);
+
+        new_doc.save().await?;
+        Ok(new_doc)
+    }
+
+    pub async fn get_module_settings<T: ModuleSettings>(
+        owner: &Owner,
+        module_key: &str,
+    ) -> Result<T, MyError> {
+        let settings_doc = Self::get_or_create(owner).await?;
+
+        let module_settings = settings_doc.modules.get(module_key).map_or_else(
+            || Ok(T::default()),
+            |json_val| serde_json::from_value(json_val.clone()).map_err(MyError::from),
+        )?;
+
+        Ok(module_settings)
+    }
+
+    pub async fn update_module_settings<T: ModuleSettings>(
+        owner: &Owner,
+        module_key: &str,
+        new_settings: T,
+    ) -> Result<(), MyError> {
+        let json_val = serde_json::to_value(new_settings)?;
+
+        let result = Self::update_one(
+            doc! { "owner_id": &owner.id, "owner_type": &owner.r#type },
+            doc! { "$set": { format!("modules.{}", module_key): bson::to_bson(&json_val)? } },
+        )
+        .await?;
+
+        if result.matched_count == 0 {
+            let mut modules = BTreeMap::new();
+            modules.insert(module_key.to_string(), json_val);
+
+            let new_doc = Settings::new()
+                .owner_id(owner.id.clone())
+                .owner_type(owner.r#type.clone())
+                .modules(modules);
+
+            new_doc.save().await?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) async fn get_or_create(owner: &Owner) -> Result<Self, MyError> {
         if let Some(found) =
-            Settings::find_one(doc! { "owner_id": owner_id, "owner_type": owner_type }).await?
+            Settings::find_one(doc! { "owner_id": &owner.id, "owner_type": &owner.r#type }).await?
         {
             Ok(found)
         } else {
-            let default_modules = vec![
-                ModuleSettings {
-                    key: "currency".to_string(),
-                    enabled: false,
-                    description: "Конвертация валют".to_string(),
-                    options: vec![ModuleOption {
-                        key: "currencies".into(),
-                        value: "USD,EUR".into(),
-                    }],
-                },
-                ModuleSettings {
-                    key: "speech".to_string(),
-                    enabled: false,
-                    description: "Распознавание речи".to_string(),
-                    options: vec![
-                        ModuleOption {
-                            key: "model".into(),
-                            value: "Gemini 2.5 Flash".into(),
-                        },
-                        ModuleOption {
-                            key: "token".into(),
-                            value: "".into(),
-                        },
-                    ],
-                },
-                create_cobalt_module(),
-            ];
-            let new = Settings::new()
-                .owner_id(owner_id.to_string())
-                .owner_type(owner_type.to_string())
-                .modules(default_modules);
-            ModelTrait::save(&new).await?;
-            Settings::get_or_create(owner_id, owner_type).await
+            let new_doc = Settings::new()
+                .owner_id(owner.id.clone())
+                .owner_type(owner.r#type.clone())
+                .modules(BTreeMap::new());
+
+            new_doc.save().await?;
+            Ok(new_doc)
         }
-    }
-
-    async fn update_module<F>(
-        owner_id: &str,
-        owner_type: &str,
-        module_key: &str,
-        modifier: F,
-    ) -> Result<Self, MyError>
-    where
-        Self: Sized,
-        F: FnOnce(&mut ModuleSettings) + Send,
-    {
-        let mut settings = Self::get_or_create(owner_id, owner_type).await?;
-
-        if let Some(module) = settings
-            .modules_mut()
-            .iter_mut()
-            .find(|m| m.key == module_key)
-        {
-            modifier(module);
-        } else {
-            return Err(MyError::ModuleNotFound(module_key.to_string()));
-        }
-
-        let filter = doc! { "owner_id": owner_id, "owner_type": owner_type };
-        let modules_as_bson = bson::to_bson(&settings.modules)?;
-        let update = doc! { "$set": { "modules": modules_as_bson } };
-
-        Self::update_one(filter, update).await?;
-
-        Ok(settings)
-    }
-
-    fn modules_mut(&mut self) -> &mut Vec<ModuleSettings> {
-        &mut self.modules
-    }
-}
-
-fn create_cobalt_module() -> ModuleSettings {
-    ModuleSettings {
-        key: "cobalt".to_string(),
-        enabled: true,
-        description: "Настройки для Cobalt Downloader".to_string(),
-        options: vec![
-            ModuleOption {
-                key: "preferred_output".into(),
-                value: "auto".into(),
-            },
-            ModuleOption {
-                key: "video_format".into(),
-                value: "h264".into(),
-            },
-            ModuleOption {
-                key: "video_quality".into(),
-                value: "1080".into(),
-            },
-            ModuleOption {
-                key: "audio_format".into(),
-                value: "mp3".into(),
-            },
-            ModuleOption {
-                key: "attribution".into(),
-                value: "false".into(),
-            }, // Используем строку "false" для унификации
-        ],
     }
 }
