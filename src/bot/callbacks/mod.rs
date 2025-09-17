@@ -91,7 +91,7 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
     if data.starts_with("delete_msg") {
         return Some(CallbackAction::DeleteMessage);
     }
-    if data.starts_with("delete_confirmation:") {
+    if data.starts_with("delete_confirm:") {
         return Some(CallbackAction::DeleteConfirmation);
     }
     if data.starts_with("summarize") {
@@ -106,7 +106,7 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
     if data.starts_with("whisper") {
         return Some(CallbackAction::Whisper);
     }
-    if data.starts_with("tr_") {
+    if data.starts_with("tr_") || data.starts_with("tr:") {
         return Some(CallbackAction::Translate);
     }
     if data.starts_with("cobalt:") {
