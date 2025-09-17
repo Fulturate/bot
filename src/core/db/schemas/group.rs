@@ -1,11 +1,14 @@
-use crate::core::db::schemas::{BaseFunctions, CurrenciesFunctions};
-use crate::core::services::currency::converter::CurrencyStruct;
+use crate::core::{
+    db::schemas::{BaseFunctions, CurrenciesFunctions},
+    services::currency::converter::CurrencyStruct,
+};
 use async_trait::async_trait;
-use mongodb::bson;
-use mongodb::bson::{doc, oid::ObjectId};
-use mongodb::results::UpdateResult;
-use oximod::_error::oximod_error::OxiModError;
-use oximod::Model;
+use mongodb::{
+    bson,
+    bson::{doc, oid::ObjectId},
+    results::UpdateResult,
+};
+use oximod::{_error::oximod_error::OxiModError, Model};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Model)]
