@@ -6,6 +6,7 @@ use redis;
 use std::string::FromUtf8Error;
 use teloxide::RequestError;
 use thiserror::Error;
+use translators::Error as TranslatorError;
 use url::ParseError;
 
 #[derive(Error, Debug)]
@@ -51,6 +52,9 @@ pub enum MyError {
 
     #[error("Base64 decoding error: {0}")]
     Base64(#[from] base64::DecodeError),
+
+    #[error("Translation service error: {0}")]
+    Translation(#[from] TranslatorError),
 
     #[error("UTF-8 conversion error: {0}")]
     Utf8(#[from] FromUtf8Error),
