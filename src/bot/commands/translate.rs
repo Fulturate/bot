@@ -74,14 +74,41 @@ pub async fn translate_handler(
         }
     }
 
+    if text_to_translate.trim().is_empty() {
+        bot.send_message(msg.chat.id, "В сообщении нет текста для перевода.")
+            .reply_parameters(ReplyParameters::new(msg.id))
+            .parse_mode(ParseMode::Html)
+            .await?;
+        return Ok(());
+    }
+
+    if text_to_translate.trim().len() >= 3000 { // amm guys? I'm... I'm good at fixing issues... I did it because:
+                                                // 1. Google Translator API has a limit of 3100+ characters
+                                                // 2. I'm lazy to do paginator 🤙🤙🤙
+        bot.send_message(msg.chat.id, "Текст превышает лимит в 3000 символов.")
+            .reply_parameters(ReplyParameters::new(msg.id))
+            .parse_mode(ParseMode::Html)
+            .await?;
+        return Ok(());
+    }
+
+    if target_lang.is_empty() {
+        bot.send_message(
+            msg.chat.id,
+            "Не удалось распознать язык. Пожалуйста, укажите корректный язык.",
+        )
+            .reply_parameters(ReplyParameters::new(msg.id))
+            .parse_mode(ParseMode::Html)
+            .await?;
+        return Ok(());
+    }
+
     let google_trans = GoogleTranslator::builder()
         .text_limit(12000usize)
         .delay(3usize)
         .timeout(50usize)
         .build();
 
-    // FIXME: Google Translator limit is up to ~3100 characters. We must think workaround for avoiding "panic" error
-    // log::info!("text: {}", text_to_translate);
     let res = google_trans
         .translate_async(text_to_translate, "", &target_lang)
         .await?;
