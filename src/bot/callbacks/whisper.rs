@@ -1,11 +1,12 @@
-use crate::bot::inlines::whisper::Whisper;
-use crate::core::config::Config;
-use crate::errors::MyError;
-use teloxide::Bot;
-use teloxide::payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters};
-use teloxide::prelude::{CallbackQuery, Requester};
-use teloxide::types::InlineKeyboardMarkup;
+use crate::{bot::inlines::whisper::Whisper, core::config::Config, errors::MyError};
+use teloxide::{
+    Bot,
+    payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
+    prelude::{CallbackQuery, Requester},
+    types::InlineKeyboardMarkup,
+};
 
+// TODO: refactor entire handler
 pub async fn handle_whisper_callback(
     bot: Bot,
     q: CallbackQuery,
@@ -17,11 +18,11 @@ pub async fn handle_whisper_callback(
     if parts.len() != 3 || parts[0] != "whisper" {
         return Ok(());
     }
+
     let action = parts[1];
     let whisper_id = parts[2];
 
     let user = q.from.clone();
-    let _username = user.username.clone().unwrap_or_default();
 
     let redis_key = format!("whisper:{}", whisper_id);
 
@@ -64,9 +65,8 @@ pub async fn handle_whisper_callback(
 
     match action {
         "read" => {
-            let alert_text = format!("{}", whisper.content);
             bot.answer_callback_query(q.id)
-                .text(alert_text)
+                .text(whisper.content.to_string())
                 .show_alert(true)
                 .await?;
         }

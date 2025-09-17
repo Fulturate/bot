@@ -1,6 +1,12 @@
-use crate::core::config::Config;
-use crate::core::db::schemas::user::User;
-use crate::errors::MyError;
+use crate::{
+    bot::modules::{Owner, currency::CurrencySettings},
+    core::{
+        config::Config,
+        db::schemas::{settings::Settings, user::User},
+        services::currency::converter::CURRENCY_REGEX,
+    },
+    errors::MyError,
+};
 use log::{debug, error};
 use mongodb::bson::doc;
 use oximod::Model;
@@ -10,12 +16,33 @@ use teloxide::{
     payloads::AnswerInlineQuerySetters,
     prelude::Requester,
     types::{
-        Chat, ChatId, ChatKind, ChatPrivate, InlineKeyboardButton, InlineKeyboardMarkup,
-        InlineQuery, InlineQueryResult, InlineQueryResultArticle, InputMessageContent,
-        InputMessageContentText, Me, ParseMode,
+        InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+        InlineQueryResultArticle, InputMessageContent, InputMessageContentText, Me, ParseMode,
     },
 };
 use uuid::Uuid;
+
+pub async fn is_currency_query(q: InlineQuery) -> bool {
+    let owner = Owner {
+        id: q.from.id.to_string(),
+        r#type: "user".to_string(),
+    };
+
+    if !CURRENCY_REGEX.is_match(&q.query) {
+        return false;
+    }
+
+    match Settings::get_module_settings::<CurrencySettings>(&owner, "currency").await {
+        Ok(settings) => settings.enabled,
+        Err(e) => {
+            error!(
+                "DB error checking currency module status for user {}: {}",
+                q.from.id, e
+            );
+            false
+        }
+    }
+}
 
 pub async fn handle_currency_inline(
     bot: Bot,
@@ -65,26 +92,29 @@ pub async fn handle_currency_inline(
     let converter = config.get_currency_converter();
     let text_to_process = &q.query;
 
-    // HACK
-    let pseudo_chat = Chat {
-        id: ChatId(q.from.id.0 as i64),
-        kind: ChatKind::Private(ChatPrivate {
-            first_name: Option::from(q.from.first_name.clone()),
-            last_name: q.from.last_name.clone(),
-            username: q.from.username.clone(),
-        }),
+    let owner = Owner {
+        id: q.from.id.to_string(),
+        r#type: "user".to_string(), // hack: inline-query always from user
     };
 
-    match converter.process_text(text_to_process, &pseudo_chat).await {
+    // HACK
+    // let pseudo_chat = Chat {
+    //     id: ChatId(q.from.id.0 as i64),
+    //     kind: ChatKind::Private(ChatPrivate {
+    //         first_name: Option::from(q.from.first_name.clone()),
+    //         last_name: q.from.last_name.clone(),
+    //         username: q.from.username.clone(),
+    //     }),
+    // };
+
+    match converter.process_text(text_to_process, &owner).await {
         Ok(mut results) => {
             if results.is_empty() {
                 debug!("No currency conversion results for: {}", &q.query);
                 return Ok(());
             }
 
-            if results.len() > 5 {
-                results.truncate(5);
-            }
+            results.truncate(5);
 
             let raw_results = results.join("\n");
 

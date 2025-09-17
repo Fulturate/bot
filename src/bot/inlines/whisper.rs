@@ -1,19 +1,21 @@
+use crate::{core::config::Config, errors::MyError};
+use log::error;
 use serde::{Deserialize, Serialize};
-use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::Arc;
-use teloxide::Bot;
-use teloxide::payloads::AnswerInlineQuerySetters;
-use teloxide::prelude::{Requester, UserId};
-use teloxide::types::{
-    InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
-    InlineQueryResultArticle, InputMessageContent, InputMessageContentText, ParseMode,
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::Arc,
+};
+use teloxide::{
+    Bot,
+    payloads::AnswerInlineQuerySetters,
+    prelude::{Requester, UserId},
+    types::{
+        InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+        InlineQueryResultArticle, InputMessageContent, InputMessageContentText, ParseMode,
+    },
+    utils::html,
 };
 use uuid::Uuid;
-
-use crate::core::config::Config;
-use crate::errors::MyError;
-use log::error;
-use teloxide::utils::html;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Recipient {
@@ -43,10 +45,7 @@ fn parse_query(query: &str) -> (String, Vec<String>) {
     let mut content_end_index = query.len();
 
     for part in query.split_whitespace().rev() {
-        if part.starts_with('@') && part.len() > 1 {
-            recipients.push(part.to_string());
-            content_end_index = query.rfind(part).unwrap_or(query.len());
-        } else if part.parse::<u64>().is_ok() {
+        if part.starts_with('@') && part.len() > 1 || part.parse::<u64>().is_ok() {
             recipients.push(part.to_string());
             content_end_index = query.rfind(part).unwrap_or(query.len());
         } else {
@@ -172,8 +171,8 @@ pub async fn handle_whisper_inline(
 
     let mut recipients: Vec<Recipient> = Vec::new();
     for identifier in &recipient_identifiers {
-        if identifier.starts_with('@') {
-            let username = identifier[1..].to_string();
+        if let Some(username) = identifier.strip_prefix('@') {
+            let username = username.to_string();
             recipients.push(Recipient {
                 id: None,
                 first_name: username.clone(),
@@ -200,10 +199,10 @@ pub async fn handle_whisper_inline(
         .cloned()
         .collect();
 
-    if !recipients_for_recents.is_empty() {
-        if let Err(e) = update_recents(&config, sender.id.0, &recipients_for_recents).await {
-            error!("Failed to update recent contacts: {:?}", e);
-        }
+    if !recipients_for_recents.is_empty()
+        && let Err(e) = update_recents(&config, sender.id.0, &recipients_for_recents).await
+    {
+        error!("Failed to update recent contacts: {:?}", e);
     }
 
     let whisper_id = Uuid::new_v4().to_string();
@@ -265,6 +264,7 @@ pub async fn handle_whisper_inline(
     Ok(())
 }
 
+// TODO: impl module settings for whisper query
 pub async fn is_whisper_query(_q: InlineQuery) -> bool {
     true
 }

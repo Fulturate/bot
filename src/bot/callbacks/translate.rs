@@ -1,16 +1,18 @@
-use crate::bot::keyboards::translate::create_language_keyboard;
-use crate::core::config::Config;
-use crate::core::services::translation::{SUPPORTED_LANGUAGES, normalize_language_code};
-use crate::errors::MyError;
-use crate::bot::keyboards::delete::delete_message_button;
-use teloxide::Bot;
-use teloxide::payloads::{EditMessageReplyMarkupSetters, EditMessageTextSetters};
-use teloxide::prelude::Requester;
-use teloxide::types::{
-    CallbackQuery, InlineKeyboardButton, MaybeInaccessibleMessage, Message, ParseMode,
+use crate::{
+    bot::keyboards::{delete::delete_message_button, translate::create_language_keyboard},
+    core::{
+        config::Config,
+        services::translation::{SUPPORTED_LANGUAGES, normalize_language_code},
+    },
+    errors::MyError,
 };
-use teloxide::utils::html::escape;
-use teloxide::{ApiError, RequestError};
+use teloxide::{
+    ApiError, Bot, RequestError,
+    payloads::{EditMessageReplyMarkupSetters, EditMessageTextSetters},
+    prelude::Requester,
+    types::{CallbackQuery, InlineKeyboardButton, MaybeInaccessibleMessage, Message, ParseMode},
+    utils::html::escape,
+};
 use translators::{GoogleTranslator, Translator};
 
 pub async fn handle_translate_callback(
@@ -102,10 +104,12 @@ async fn handle_language_selection(
 
     let normalized_lang = normalize_language_code(target_lang);
     let google_trans = GoogleTranslator::default();
+
+    // FIXME: Google Translator limit is up to ~3100 characters. We must think workaround for avoiding "panic" error
+    // log::info!("text: {}", text_to_translate);
     let res = google_trans
-        .translate_async(text_to_translate, "", &*normalized_lang)
-        .await
-        .unwrap();
+        .translate_async(text_to_translate, "", &normalized_lang)
+        .await?;
 
     let response = format!("<blockquote>{}\n</blockquote>", escape(&res));
 
@@ -119,10 +123,13 @@ async fn handle_language_selection(
         InlineKeyboardButton::callback(lang_display_name.to_string(), "tr_show_langs".to_string());
 
     let mut keyboard = delete_message_button(user.id.0);
-    if let Some(first_row) = keyboard.inline_keyboard.get_mut(0) {
-        first_row.insert(0, switch_lang_button);
-    } else {
-        keyboard.inline_keyboard.push(vec![switch_lang_button]);
+    match keyboard.inline_keyboard.get_mut(0) {
+        Some(first_row) => {
+            first_row.insert(0, switch_lang_button);
+        }
+        None => {
+            keyboard.inline_keyboard.push(vec![switch_lang_button]);
+        }
     }
 
     if let Err(e) = bot

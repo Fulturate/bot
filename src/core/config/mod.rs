@@ -1,13 +1,15 @@
 mod json;
 
-use crate::core::db::redis::RedisCache;
-use crate::core::services::currency::converter::{CurrencyConverter, OutputLanguage};
+use crate::core::{
+    config::json::{JsonConfig, read_json_config},
+    db::redis::RedisCache,
+    services::currency::converter::{CurrencyConverter, OutputLanguage},
+};
 use dotenv::dotenv;
 use log::error;
 use redis::Client as RedisClient;
 use std::sync::Arc;
 use teloxide::prelude::*;
-use crate::core::config::json::{read_json_config, JsonConfig};
 
 #[derive(Clone)]
 pub struct Config {
@@ -79,7 +81,8 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(0.to_string());
 
-        let Ok(json_config) = read_json_config("config.json") else { // todo: remove JsonConfig because useless when we will get /settings
+        let Ok(json_config) = read_json_config("config.json") else {
+            // todo: remove JsonConfig because useless when we will get /settings
             error!("Unable to read config.json");
             std::process::exit(1);
         };

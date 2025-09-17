@@ -9,11 +9,7 @@ pub enum Command {
     SpeechRecognition,
     #[command(description = "Translate", alias = "tr")]
     Translate(String),
-    #[command(parse_with = "split", description = "Set currency to convert")]
-    SetCurrency { code: String },
-    #[command(description = "List of available currencies to convert")]
-    ListCurrency,
-    #[command(description = "Settings of bot")]
+    #[command(description = "Bot settings")]
     Settings,
 }
 

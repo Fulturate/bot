@@ -1,11 +1,14 @@
-use crate::bot::keyboards::cobalt::make_photo_pagination_keyboard;
-use crate::bot::inlines::cobalter::DownloadResult;
-use crate::core::config::Config;
-use crate::errors::MyError;
+use crate::{
+    bot::keyboards::cobalt::make_photo_pagination_keyboard,
+    core::{config::Config, services::cobalt::DownloadResult},
+    errors::MyError,
+};
 use std::sync::Arc;
-use teloxide::prelude::*;
-use teloxide::types::{CallbackQuery, InputFile, InputMedia, InputMediaPhoto};
-use teloxide::{ApiError, RequestError};
+use teloxide::{
+    ApiError, RequestError,
+    prelude::*,
+    types::{CallbackQuery, InputFile, InputMedia, InputMediaPhoto},
+};
 
 struct PagingData<'a> {
     original_user_id: u64,
@@ -19,6 +22,7 @@ impl<'a> PagingData<'a> {
         if parts.len() < 5 {
             return None;
         }
+
         Some(Self {
             original_user_id: parts.get(1)?.parse().ok()?,
             index: parts.get(2)?.parse().ok()?,
@@ -42,7 +46,7 @@ pub async fn handle_cobalt_pagination(
     }
 
     let Some(paging_data) = PagingData::from_parts(&parts) else {
-        log::warn!("Invalid callback data format: {}", data);
+        log::error!("Invalid callback data format: {}", data);
         return Ok(());
     };
 
@@ -101,13 +105,13 @@ pub async fn handle_cobalt_pagination(
         return Ok(());
     };
 
-    if let Err(e) = edit_result {
-        if !matches!(e, RequestError::Api(ApiError::MessageNotModified)) {
-            log::error!("Failed to edit message for pagination: {}", e);
-            bot.answer_callback_query(q.id.clone())
-                .text("Не удалось обновить фото.")
-                .await?;
-        }
+    if let Err(e) = edit_result
+        && !matches!(e, RequestError::Api(ApiError::MessageNotModified))
+    {
+        log::error!("Failed to edit message for pagination: {}", e);
+        bot.answer_callback_query(q.id.clone())
+            .text("Не удалось обновить фото.")
+            .await?;
     }
 
     bot.answer_callback_query(q.id).await?;

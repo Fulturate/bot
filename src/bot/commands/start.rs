@@ -1,14 +1,19 @@
-use crate::core::config::Config;
-use crate::core::db::schemas::user::User;
-use crate::errors::MyError;
-use crate::core::services::currency::converter::get_default_currencies;
-use log::error;
+use crate::{
+    bot::modules::Owner,
+    core::{
+        config::Config,
+        db::schemas::{settings::Settings, user::User},
+    },
+    errors::MyError,
+};
 use mongodb::bson::doc;
 use oximod::Model;
 use std::time::Instant;
 use sysinfo::System;
-use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters};
+use teloxide::{
+    prelude::*,
+    types::{ParseMode, ReplyParameters},
+};
 
 pub async fn start_handler(
     bot: Bot,
@@ -19,47 +24,29 @@ pub async fn start_handler(
     if message.chat.is_private() {
         let user = message.from.clone().unwrap();
 
-        match User::find_one(doc! { "user_id": &user.id.to_string() }).await {
-            Ok(Some(_)) => {}
-            Ok(None) => {
-                let necessary_codes = get_default_currencies()?;
-
-                return match User::new()
-                    .user_id(user.id.to_string().clone())
-                    .convertable_currencies(necessary_codes)
-                    .save()
-                    .await
-                {
-                    Ok(_) => {
-                        bot.send_message(
-                            message.chat.id,
-                            "Welcome! You have been successfully registered",
-                        )
-                        .await?;
-                        Ok(())
-                    }
-                    Err(e) => {
-                        error!("Failed to save new user {} to DB: {}", &user.id, e);
-                        bot.send_message(
-                            message.chat.id,
-                            "Something went wrong during registration. Please try again later.",
-                        )
-                        .await?;
-                        Ok(())
-                    }
-                };
-            }
-            Err(e) => {
-                error!("Database error while checking user {}: {}", &user.id, e);
-                bot.send_message(
-                    message.chat.id,
-                    "A database error occurred. Please try again later.",
-                )
+        if User::find_one(doc! { "user_id": &user.id.to_string() })
+            .await?
+            .is_none()
+        {
+            User::new()
+                .user_id(user.id.to_string().clone())
+                .save()
                 .await?;
-                return Ok(());
-            }
-        };
+
+            let owner = Owner {
+                id: user.id.to_string(),
+                r#type: "user".to_string(),
+            };
+            Settings::create_with_defaults(&owner).await?;
+
+            bot.send_message(
+                message.chat.id,
+                "Welcome! You have been successfully registered",
+            )
+            .await?;
+        }
     }
+
     let version = config.get_version();
 
     let start_time = Instant::now();

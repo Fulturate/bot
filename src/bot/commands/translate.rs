@@ -1,11 +1,16 @@
-use crate::bot::keyboards::translate::create_language_keyboard;
-use crate::core::config::Config;
-use crate::core::services::translation::{SUPPORTED_LANGUAGES, normalize_language_code};
-use crate::errors::MyError;
-use crate::bot::keyboards::delete::delete_message_button;
-use teloxide::prelude::*;
-use teloxide::types::{InlineKeyboardButton, Message, ParseMode, ReplyParameters};
-use teloxide::utils::html::escape;
+use crate::{
+    bot::keyboards::{delete::delete_message_button, translate::create_language_keyboard},
+    core::{
+        config::Config,
+        services::translation::{SUPPORTED_LANGUAGES, normalize_language_code},
+    },
+    errors::MyError,
+};
+use teloxide::{
+    prelude::*,
+    types::{InlineKeyboardButton, Message, ParseMode, ReplyParameters},
+    utils::html::escape,
+};
 use translators::{GoogleTranslator, Translator};
 
 pub async fn translate_handler(
@@ -51,7 +56,7 @@ pub async fn translate_handler(
     let target_lang: String;
 
     if !arg.trim().is_empty() {
-        target_lang = normalize_language_code(&arg.trim());
+        target_lang = normalize_language_code(arg.trim());
     } else {
         let redis_key = format!("user_lang:{}", user.id);
         let redis_client = config.get_redis_client();
@@ -69,11 +74,17 @@ pub async fn translate_handler(
         }
     }
 
-    let google_trans = GoogleTranslator::default();
+    let google_trans = GoogleTranslator::builder()
+        .text_limit(12000usize)
+        .delay(3usize)
+        .timeout(50usize)
+        .build();
+
+    // FIXME: Google Translator limit is up to ~3100 characters. We must think workaround for avoiding "panic" error
+    // log::info!("text: {}", text_to_translate);
     let res = google_trans
-        .translate_async(text_to_translate, "", &*target_lang)
-        .await
-        .unwrap();
+        .translate_async(text_to_translate, "", &target_lang)
+        .await?;
 
     let response = format!("<blockquote>{}\n</blockquote>", escape(&res));
 

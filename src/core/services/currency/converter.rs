@@ -1,23 +1,20 @@
+use crate::{
+    bot::modules::{Owner, currency::CurrencySettings},
+    core::db::schemas::settings::Settings,
+    errors::MyError,
+    util::currency_values::WORD_VALUES,
+};
+use log::{debug, error, warn};
+use once_cell::sync::Lazy;
+use regex::Regex;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     fs,
     sync::Arc,
     time::{Duration, Instant},
 };
-
-use super::structs::WORD_VALUES;
-use crate::core::db::schemas::CurrenciesFunctions;
-use crate::core::db::schemas::group::Group;
-use crate::core::db::schemas::user::User;
-use crate::errors::MyError;
-use log::{debug, error, warn};
-use once_cell::sync::Lazy;
-use oximod::Model;
-use regex::Regex;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use teloxide::prelude::InlineQuery;
-use teloxide::types::Chat;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
@@ -129,7 +126,7 @@ fn build_regex_from_config() -> Result<String, ConvertError> {
     Ok(regex_string)
 }
 
-static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
+pub(crate) static CURRENCY_REGEX: Lazy<Regex> = Lazy::new(|| {
     let regex_string = build_regex_from_config()
         .map_err(|e| e.to_string())
         .expect("FATAL: Could not build regex from currency config file.");
@@ -143,10 +140,6 @@ static COMPONENT_RE: Lazy<Regex> = Lazy::new(|| {
 });
 static INFIX_K_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(\d+(?:[.,]\d+)?)[kк](\d{1,3})$").unwrap());
-
-pub async fn is_currency_query(q: InlineQuery) -> bool {
-    CURRENCY_REGEX.is_match(&q.query)
-}
 
 pub fn get_all_currency_codes(config_file: String) -> Result<Vec<CurrencyStruct>, ConvertError> {
     let mut codes: Vec<CurrencyStruct> = vec![];
@@ -268,7 +261,6 @@ impl CurrencyConverter {
             .map_err(|e| ConvertError::ConfigFileParseError(config_path_str.to_string(), e))?;
 
         let mut currency_map = HashMap::new();
-        // let mut target_codes = Vec::new();
 
         // for fucking ton api
         let mut ton_tickers = Vec::new();
@@ -277,10 +269,6 @@ impl CurrencyConverter {
         let mut ton_address_to_code = HashMap::new();
 
         for currency in currencies {
-            // if currency.is_target {
-            //     target_codes.push(currency.code.clone());
-            // }
-
             if currency.source == "tonapi"
                 && let Some(identifier) = &currency.api_identifier
             {
@@ -302,7 +290,6 @@ impl CurrencyConverter {
             cache: Arc::new(Mutex::new(None)),
             client: Client::new(),
             currency_info: currency_map,
-            // target_currencies: target_codes,
             language,
             ton_tickers,
             ton_addresses,
@@ -701,31 +688,29 @@ impl CurrencyConverter {
         Ok(result.trim_end().to_string())
     }
 
-    pub async fn process_text(&self, text: &str, chat: &Chat) -> Result<Vec<String>, ConvertError> {
-        let chat_id_str = chat.id.to_string();
-        let target_codes = if chat.is_private() {
-            match User::find_one(mongodb::bson::doc! { "user_id": chat_id_str }).await {
-                Ok(Some(user)) => user
-                    .get_currencies()
-                    .iter()
-                    .map(|c| c.code.clone())
-                    .collect(),
-                _ => Vec::new(),
-            }
-        } else {
-            match Group::find_one(mongodb::bson::doc! { "group_id": chat_id_str }).await {
-                Ok(Some(group)) => group
-                    .get_currencies()
-                    .iter()
-                    .map(|c| c.code.clone())
-                    .collect(),
-                _ => Vec::new(),
-            }
-        };
+    pub async fn process_text(
+        &self,
+        text: &str,
+        owner: &Owner,
+    ) -> Result<Vec<String>, ConvertError> {
+        let currency_settings: CurrencySettings =
+            match Settings::get_module_settings(owner, "currency").await {
+                Ok(settings) => settings,
+                Err(e) => {
+                    error!(
+                        "Could not get currency settings for owner {:?}: {}",
+                        owner, e
+                    );
 
-        if target_codes.is_empty() {
+                    return Ok(Vec::new());
+                }
+            };
+
+        if !currency_settings.enabled || currency_settings.selected_codes.is_empty() {
             return Ok(Vec::new());
         }
+
+        let target_codes = currency_settings.selected_codes;
 
         let detected_currencies = self.parse_text_for_currencies(text)?;
         if detected_currencies.is_empty() {

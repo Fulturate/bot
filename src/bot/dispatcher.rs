@@ -1,14 +1,20 @@
-use crate::bot::callbacks::callback_query_handlers;
-use crate::bot::commander::command_handlers;
-use crate::bot::messages::chat::handle_bot_added;
-use crate::bot::messager::{handle_currency, handle_speech};
-use crate::bot::inlines::cobalter::{handle_cobalt_inline, is_query_url};
-use crate::bot::inlines::currency::handle_currency_inline;
-use crate::bot::inlines::whisper::{handle_whisper_inline, is_whisper_query};
-use crate::core::config::Config;
-use crate::errors::MyError;
-use crate::util::enums::Command;
-use crate::bot::keyboards::delete::delete_message_button;
+use crate::{
+    bot::{
+        callbacks::callback_query_handlers,
+        commander::command_handlers,
+        inlines::{
+            cobalter::{handle_cobalt_inline, is_query_url},
+            currency::{handle_currency_inline, is_currency_query},
+            whisper::{handle_whisper_inline, is_whisper_query},
+        },
+        keyboards::delete::delete_message_button,
+        messager::{handle_currency, handle_speech},
+        messages::chat::handle_bot_added,
+    },
+    core::config::Config,
+    errors::MyError,
+    util::enums::Command,
+};
 use log::{error, info};
 use oximod::set_global_client;
 use std::{convert::Infallible, fmt::Write, ops::ControlFlow, sync::Arc};
@@ -25,7 +31,6 @@ use teloxide::{
     update_listeners::Polling,
     utils::{command::BotCommands, html},
 };
-use crate::core::services::currency::converter::is_currency_query;
 
 async fn root_handler(
     update: Update,

@@ -1,14 +1,20 @@
-use crate::core::db::functions::get_or_create;
-use crate::core::db::schemas::group::Group;
-use crate::core::db::schemas::user::User;
-use crate::core::db::schemas::{BaseFunctions, CurrenciesFunctions};
-use crate::errors::MyError;
-use crate::core::services::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes};
+use crate::{
+    core::{
+        db::{
+            functions::get_or_create,
+            schemas::{BaseFunctions, CurrenciesFunctions, group::Group, user::User},
+        },
+        services::currency::converter::{CURRENCY_CONFIG_PATH, get_all_currency_codes},
+    },
+    errors::MyError,
+};
 use log::error;
 use oximod::Model;
 use std::collections::HashSet;
-use teloxide::prelude::*;
-use teloxide::types::{ParseMode, ReplyParameters};
+use teloxide::{
+    prelude::*,
+    types::{ParseMode, ReplyParameters},
+};
 
 pub async fn handle_currency_update<T: BaseFunctions + CurrenciesFunctions + Model>(
     bot: Bot,

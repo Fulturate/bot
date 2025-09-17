@@ -1,46 +1,21 @@
+use crate::util::paginator::{FrameBuild, Paginator};
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
-pub const TRANSCRIPTION_MODULE_KEY: &str = "transcription";
+pub const TRANSCRIPTION_MODULE_KEY: &str = "speech";
 
 pub fn create_transcription_keyboard(
     current_page: usize,
     total_pages: usize,
     user_id: u64,
 ) -> InlineKeyboardMarkup {
-    let mut keyboard: Vec<Vec<InlineKeyboardButton>> = vec![];
+    let summary_button = InlineKeyboardButton::callback("✨", "summarize");
+    let delete_button = InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", user_id));
 
-    let mut nav_row = Vec::new();
-
-    if current_page > 0 {
-        nav_row.push(InlineKeyboardButton::callback(
-            "⬅️",
-            format!("{}:page:{}", TRANSCRIPTION_MODULE_KEY, current_page - 1),
-        ));
-    }
-
-    nav_row.push(InlineKeyboardButton::callback(
-        format!("📄 {}/{}", current_page + 1, total_pages),
-        "noop",
-    ));
-
-    if current_page + 1 < total_pages {
-        nav_row.push(InlineKeyboardButton::callback(
-            "➡️",
-            format!("{}:page:{}", TRANSCRIPTION_MODULE_KEY, current_page + 1),
-        ));
-    }
-
-    if total_pages > 1 {
-        keyboard.push(nav_row);
-    }
-
-    let action_row = vec![
-        InlineKeyboardButton::callback("✨", "summarize"),
-        InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", user_id)),
-    ];
-    keyboard.push(action_row);
-
-    InlineKeyboardMarkup::new(keyboard)
+    Paginator::new(TRANSCRIPTION_MODULE_KEY, total_pages)
+        .current_page(current_page)
+        .add_bottom_row(vec![summary_button])
+        .add_bottom_row(vec![delete_button])
+        .build()
 }
 
 pub fn create_summary_keyboard() -> InlineKeyboardMarkup {

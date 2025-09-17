@@ -1,9 +1,9 @@
-use crate::bot::messages::sound::voice::voice_handler;
-use crate::bot::messages::sound::voice_note::voice_note_handler;
-use crate::core::config::Config;
-use crate::errors::MyError;
-use teloxide::Bot;
-use teloxide::prelude::Message;
+use crate::{
+    bot::messages::sound::{voice::voice_handler, voice_note::voice_note_handler},
+    core::config::Config,
+    errors::MyError,
+};
+use teloxide::{Bot, prelude::Message};
 
 pub async fn sound_handlers(bot: Bot, message: Message, config: &Config) -> Result<(), MyError> {
     let config = config.clone();

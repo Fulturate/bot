@@ -1,13 +1,18 @@
-use crate::bot::messages::sounder::sound_handlers;
-use crate::core::config::Config;
-use crate::errors::MyError;
+use crate::{
+    bot::{
+        keyboards::delete::delete_message_button, messages::sounder::sound_handlers, modules::Owner,
+    },
+    core::config::Config,
+    errors::MyError,
+};
 use log::error;
-use teloxide::Bot;
-use teloxide::payloads::SendMessageSetters;
-use teloxide::requests::Requester;
-use teloxide::types::{Message, ParseMode, ReplyParameters};
+use teloxide::{
+    Bot,
+    payloads::SendMessageSetters,
+    requests::Requester,
+    types::{Message, ParseMode, ReplyParameters},
+};
 use tokio::task;
-use crate::bot::keyboards::delete::delete_message_button;
 
 pub async fn handle_speech(bot: Bot, message: Message) -> Result<(), MyError> {
     let config = Config::new().await;
@@ -29,8 +34,6 @@ pub async fn handle_speech(bot: Bot, message: Message) -> Result<(), MyError> {
 pub async fn handle_currency(bot: Bot, message: Message) -> Result<(), MyError> {
     let config = Config::new().await;
 
-    let bot_clone = bot.clone();
-
     task::spawn(async move {
         let user = message.from.clone().unwrap();
 
@@ -43,15 +46,23 @@ pub async fn handle_currency(bot: Bot, message: Message) -> Result<(), MyError> 
 
         let converter = config.get_currency_converter();
         if let Some(text) = message.text() {
-            match converter.process_text(text, &message.chat).await {
+            let owner = Owner {
+                id: message.chat.id.to_string(),
+                r#type: (if message.chat.is_private() {
+                    "user"
+                } else {
+                    "group"
+                })
+                .to_string(),
+            };
+
+            match converter.process_text(text, &owner).await {
                 Ok(mut results) => {
                     if results.is_empty() {
                         return;
                     }
 
-                    if results.len() > 5 {
-                        results.truncate(5);
-                    }
+                    results.truncate(5);
 
                     let formatted_blocks: Vec<String> = results
                         .into_iter()
@@ -61,10 +72,8 @@ pub async fn handle_currency(bot: Bot, message: Message) -> Result<(), MyError> 
                         })
                         .collect();
 
-                    let final_message = formatted_blocks.join("\n");
-
-                    if let Err(e) = bot_clone
-                        .send_message(message.chat.id, final_message)
+                    if let Err(e) = bot
+                        .send_message(message.chat.id, formatted_blocks.join("\n"))
                         .parse_mode(ParseMode::Html)
                         .reply_markup(delete_message_button(user.id.0))
                         .reply_parameters(ReplyParameters::new(message.id))
