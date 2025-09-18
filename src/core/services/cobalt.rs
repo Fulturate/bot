@@ -35,7 +35,10 @@ impl VideoQuality {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum DownloadResult {
-    Video(String),
+    Video {
+        url: String,
+        original_url: String,
+    },
     Photos {
         urls: Vec<String>,
         original_url: String,
@@ -77,12 +80,21 @@ pub async fn resolve_download_url(
                 }));
             }
             if let Some(video_item) = picker.iter().find(|item| item.kind == "video") {
-                return Ok(Some(DownloadResult::Video(video_item.url.clone())));
+                return Ok(Some(DownloadResult::Video {
+                    url: video_item.url.clone(),
+                    original_url: url.to_string(),
+                }));
             }
             Ok(None)
         }
-        DownloadResponse::Tunnel { url, filename }
-        | DownloadResponse::Redirect { url, filename } => {
+        DownloadResponse::Tunnel {
+            url: c_url,
+            filename,
+        }
+        | DownloadResponse::Redirect {
+            url: c_url,
+            filename,
+        } => {
             const PHOTO_EXTENSIONS: &[&str] = &[".jpg", ".jpeg", ".png", ".gif", ".webp"];
             let is_photo = PHOTO_EXTENSIONS
                 .iter()
@@ -90,13 +102,21 @@ pub async fn resolve_download_url(
 
             if is_photo {
                 Ok(Some(DownloadResult::Photos {
-                    urls: vec![url.clone()],
-                    original_url: url,
+                    urls: vec![c_url.clone()],
+                    original_url: url.to_string(),
                 }))
             } else {
-                Ok(Some(DownloadResult::Video(url)))
+                Ok(Some(DownloadResult::Video {
+                    url: c_url,
+                    original_url: url.to_string(),
+                }))
             }
         }
-        _ => Ok(response.get_download_url().map(DownloadResult::Video)),
+        _ => Ok(response
+            .get_download_url()
+            .map(|c_url| DownloadResult::Video {
+                url: c_url,
+                original_url: url.to_string(),
+            })),
     }
 }

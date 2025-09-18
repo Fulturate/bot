@@ -18,9 +18,10 @@ use teloxide::{
     prelude::*,
     types::{
         InlineQuery, InlineQueryResult, InlineQueryResultArticle, InlineQueryResultPhoto,
-        InlineQueryResultVideo, InputMessageContent, InputMessageContentText,
+        InputMessageContent, InputMessageContentText, InputFile, InputMedia, InputMediaVideo
     },
 };
+use url::Url;
 
 static URL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^(https?)://[^\s/$.?#].[^\s]*$").unwrap());
@@ -48,18 +49,18 @@ fn build_results_from_media(
     user_id: u64,
 ) -> Vec<InlineQueryResult> {
     match media {
-        DownloadResult::Video(video_url) => {
-            if let Ok(url) = video_url.parse() {
+        DownloadResult::Video { url, .. } => {
+            if let Ok(_url) = url.parse::<Url>() {
                 let url_kb = make_single_url_keyboard(original_url);
-
-                let result = InlineQueryResultVideo::new(
+                let result = InlineQueryResultArticle::new(
                     format!("cobalt_video:{}", url_hash),
-                    url,
-                    "video/mp4".parse().unwrap(),
-                    "https://i.imgur.com/D0A9Gxh.png".parse().unwrap(), /* preview */
-                    "Скачать видео".to_string(),
+                    "Скачать видео",
+                    InputMessageContent::Text(InputMessageContentText::new(
+                        "Нажмите, чтобы отправить видео",
+                    )),
                 )
                 .reply_markup(url_kb);
+
                 vec![result.into()]
             } else {
                 vec![
@@ -162,5 +163,50 @@ pub async fn handle_cobalt_inline(
         }
     };
     bot.answer_inline_query(q.id, results).cache_time(0).await?;
+    Ok(())
+}
+
+pub async fn handle_inline_video(
+    bot: Bot,
+    chosen: ChosenInlineResult,
+    config: Arc<Config>,
+) -> Result<(), MyError> {
+    let Some(inline_message_id) = chosen.inline_message_id else {
+        return Ok(());
+    };
+
+    let Some(url_hash) = chosen.result_id.strip_prefix("cobalt_video:") else {
+        return Ok(());
+    };
+
+    bot.edit_message_text_inline(&inline_message_id, "⏳ Загружаю видео...")
+        .await?;
+
+    let redis = config.get_redis_client();
+    let cache_key = format!("cobalt_cache:{}", url_hash);
+
+    match redis.get::<DownloadResult>(&cache_key).await? {
+        Some(DownloadResult::Video { url, original_url }) => {
+            let media = InputMedia::Video(InputMediaVideo::new(InputFile::url(url.parse()?)));
+            let url_kb = make_single_url_keyboard(&original_url);
+
+            if let Err(_e) = bot
+                .edit_message_media_inline(&inline_message_id, media)
+                .reply_markup(url_kb)
+                .await
+            {
+                bot.edit_message_text_inline(
+                    inline_message_id,
+                    "❌ Ошибка: не удалось отправить видео.",
+                )
+                .await?;
+            }
+        }
+        _ => {
+            bot.edit_message_text_inline(inline_message_id, "❌ Ошибка: видео не найдено в кэше.")
+                .await?;
+        }
+    }
+
     Ok(())
 }

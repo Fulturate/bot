@@ -31,6 +31,7 @@ use teloxide::{
     update_listeners::Polling,
     utils::{command::BotCommands, html},
 };
+use crate::bot::inlines::cobalter::handle_inline_video;
 
 async fn root_handler(
     update: Update,
@@ -78,7 +79,8 @@ async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
         )
         .branch(Update::filter_callback_query().endpoint(callback_query_handlers))
         .branch(Update::filter_my_chat_member().endpoint(handle_bot_added))
-        .branch(Update::filter_inline_query().branch(inline_query_handler()));
+        .branch(Update::filter_inline_query().branch(inline_query_handler()))
+        .branch(Update::filter_chosen_inline_result().endpoint(handle_inline_video));
 
     let me = bot.get_me().await?;
     info!("Bot name: {:?}", me.username());
