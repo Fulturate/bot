@@ -104,13 +104,15 @@ impl Settings {
         {
             Ok(found)
         } else {
-            let new_doc = Settings::new()
-                .owner_id(owner.id.clone())
-                .owner_type(owner.r#type.clone())
-                .modules(BTreeMap::new());
-
-            new_doc.save().await?;
+            let new_doc = Self::create_with_defaults(owner).await?;
             Ok(new_doc)
+            // let new_doc = Settings::new()
+            //     .owner_id(owner.id.clone())
+            //     .owner_type(owner.r#type.clone())
+            //     .modules(BTreeMap::new());
+            //
+            // new_doc.save().await?;
+            // Ok(new_doc)
         }
     }
 }

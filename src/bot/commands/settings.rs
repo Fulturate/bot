@@ -14,7 +14,7 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
     }
     .to_string();
 
-    let settings_doc = Settings::create_with_defaults(&Owner {
+    let settings_doc = Settings::get_or_create(&Owner {
         id: owner_id.clone(),
         r#type: owner_type.clone(),
     })
