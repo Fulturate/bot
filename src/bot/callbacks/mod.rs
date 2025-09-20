@@ -138,6 +138,7 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
                 let (text, keyboard) = module.get_settings_ui(&owner).await?;
                 bot.edit_message_text(message.chat().id, message.id(), text)
                     .reply_markup(keyboard)
+                    .parse_mode(teloxide::types::ParseMode::Html)
                     .await?;
             }
         }

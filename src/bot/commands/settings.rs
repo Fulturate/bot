@@ -12,13 +12,20 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
     } else {
         "group"
     }
-    .to_string();
+        .to_string();
 
     let settings_doc = Settings::get_or_create(&Owner {
         id: owner_id.clone(),
         r#type: owner_type.clone(),
     })
-    .await?;
+        .await?;
+
+    let text = String::from(
+        "⚙️ <b>Настройки модулей</b>\n\n\
+        Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
+        ✅ – модуль включён\n\
+        ❌ – модуль выключен\n\n"
+    );
 
     let kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
         .get_all_modules()
@@ -36,7 +43,8 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
                 .unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
-            let text = format!("{} {}", status, module.description());
+            let text = format!("{} — {}", status, module.description());
+
             let callback_data =
                 format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
 
@@ -46,7 +54,8 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 
-    bot.send_message(message.chat.id, "Настройки модулей:")
+    bot.send_message(message.chat.id, text)
+        .parse_mode(teloxide::types::ParseMode::Html)
         .reply_markup(keyboard)
         .await?;
 
@@ -63,7 +72,14 @@ pub async fn update_settings_message(
         id: owner_id.clone(),
         r#type: owner_type.clone(),
     })
-    .await?;
+        .await?;
+
+    let text = String::from(
+        "⚙️ <b>Настройки модулей</b>\n\n\
+        Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
+        ✅ – модуль включён\n\
+        ❌ – модуль выключен\n\n"
+    );
 
     let kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
         .get_all_modules()
@@ -80,7 +96,7 @@ pub async fn update_settings_message(
                 .unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
-            let text = format!("{} {}", status, module.description());
+            let text = format!("{} — {}", status, module.description());
             let callback_data =
                 format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
 
@@ -90,11 +106,10 @@ pub async fn update_settings_message(
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 
-    let text = "Настройки модулей:";
-
     if let MaybeInaccessibleMessage::Regular(msg) = message {
         let _ = bot
             .edit_message_text(msg.chat.id, msg.id, text)
+            .parse_mode(teloxide::types::ParseMode::Html)
             .reply_markup(keyboard)
             .await;
     }

@@ -43,7 +43,7 @@ impl Module for WhisperModule {
         let settings: WhisperSettings = Settings::get_module_settings(owner, self.key()).await?;
 
         let text = format!(
-            "⚙️ Настройки модуля: {}\n\nСтатус: {}",
+            "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}",
             self.description(),
             if settings.enabled {
                 "✅ Включен"
@@ -98,6 +98,7 @@ impl Module for WhisperModule {
             let (text, keyboard) = self.get_settings_ui(owner).await?;
             bot.edit_message_text(message.chat.id, message.id, text)
                 .reply_markup(keyboard)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
             return Ok(());
         }
@@ -114,6 +115,7 @@ impl Module for WhisperModule {
         let (text, keyboard) = self.get_settings_ui(owner).await?;
         bot.edit_message_text(message.chat.id, message.id, text)
             .reply_markup(keyboard)
+            .parse_mode(teloxide::types::ParseMode::Html)
             .await?;
 
         Ok(())

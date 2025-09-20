@@ -101,6 +101,7 @@ impl Module for CurrencyModule {
 
             bot.edit_message_text(message.chat.id, message.id, text)
                 .reply_markup(keyboard)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
 
             return Ok(());
@@ -113,6 +114,7 @@ impl Module for CurrencyModule {
 
             bot.edit_message_text(message.chat.id, message.id, text)
                 .reply_markup(keyboard)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
 
             return Ok(());
@@ -138,6 +140,7 @@ impl Module for CurrencyModule {
 
             bot.edit_message_text(message.chat.id, message.id, text)
                 .reply_markup(keyboard)
+                .parse_mode(teloxide::types::ParseMode::Html)
                 .await?;
         } else {
             bot.answer_callback_query(q.id.clone()).await?;
@@ -174,7 +177,7 @@ impl CurrencyModule {
     ) -> Result<(String, InlineKeyboardMarkup), MyError> {
         let settings: CurrencySettings = Settings::get_module_settings(owner, self.key()).await?;
         let text = format!(
-            "⚙️ Настройки модуля: {}\n\nСтатус: {}\n\nВыберите валюты для отображения.",
+            "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}\n\nВыберите валюты для отображения.",
             self.description(),
             if settings.enabled {
                 "✅ Включен"
