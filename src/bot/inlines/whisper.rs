@@ -16,6 +16,10 @@ use teloxide::{
     utils::html,
 };
 use uuid::Uuid;
+use crate::bot::modules::cobalt::CobaltSettings;
+use crate::bot::modules::Owner;
+use crate::bot::modules::whisper::WhisperSettings;
+use crate::core::db::schemas::settings::Settings;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Recipient {
@@ -94,6 +98,16 @@ pub async fn handle_whisper_inline(
     q: InlineQuery,
     config: Arc<Config>,
 ) -> Result<(), MyError> {
+    let owner = Owner {
+        id: q.from.id.to_string(),
+        r#type: "user".to_string(),
+    };
+
+    let settings = Settings::get_module_settings::<WhisperSettings>(&owner, "whisper").await?;
+    if !settings.enabled {
+        return Ok(());
+    }
+
     if q.query.is_empty() {
         let article = InlineQueryResultArticle::new(
             "whisper_help",

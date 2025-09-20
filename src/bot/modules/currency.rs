@@ -16,21 +16,30 @@ use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
+use crate::core::services::currency::converter::get_default_currencies;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CurrencySettings {
     pub enabled: bool,
     pub selected_codes: Vec<String>,
 }
 
-// impl Default for CurrencySettings {
-//     fn default() -> Self {
-//         Self {
-//             enabled: false,
-//             selected_codes: vec![],
-//         }
-//     }
-// }
+impl Default for CurrencySettings {
+    fn default() -> Self {
+        let default_currencies = get_default_currencies()
+            .map(|currencies| 
+                currencies.into_iter()
+                    .map(|c| c.code)
+                    .collect::<Vec<String>>()
+            )
+            .unwrap_or_else(|_| vec!["usd".to_string(), "eur".to_string()]);
+            
+        Self {
+            enabled: true,
+            selected_codes: default_currencies,
+        }
+    }
+}
 
 impl ModuleSettings for CurrencySettings {}
 

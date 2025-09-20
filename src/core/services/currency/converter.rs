@@ -160,11 +160,10 @@ pub fn get_default_currencies() -> Result<Vec<CurrencyStruct>, MyError> {
     let all_codes = get_all_currency_codes(CURRENCY_CONFIG_PATH.parse().unwrap())?;
 
     let necessary_codes = all_codes
-        .iter()
+        .into_iter()
         .filter(|c| {
             ["uah", "rub", "usd", "byn", "eur", "ton"].contains(&c.code.to_lowercase().as_str())
         })
-        .cloned()
         .collect::<Vec<CurrencyStruct>>();
 
     Ok(necessary_codes)
