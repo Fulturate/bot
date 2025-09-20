@@ -1,9 +1,12 @@
+use crate::bot::modules::registry::MOD_MANAGER;
+use crate::bot::modules::Owner;
+use crate::core::db::schemas::settings::Settings;
 use crate::{
     bot::{
         callbacks::callback_query_handlers,
         commander::command_handlers,
         inlines::{
-            cobalter::{handle_cobalt_inline, is_query_url},
+            cobalter::{handle_cobalt_inline, handle_inline_video, is_query_url},
             currency::{handle_currency_inline, is_currency_query},
             whisper::{handle_whisper_inline, is_whisper_query},
         },
@@ -11,27 +14,33 @@ use crate::{
         messager::{handle_currency, handle_speech},
         messages::chat::handle_bot_added,
     },
-    core::config::Config,
+    core::{config::Config,
+           db::schemas::user::User as DBUser},
     errors::MyError,
     util::enums::Command,
 };
-use log::{error, info};
-use oximod::set_global_client;
+use log::{debug, error, info};
+use mongodb::bson::doc;
+use oximod::{set_global_client, Model};
+use serde::Deserialize;
 use std::{convert::Infallible, fmt::Write, ops::ControlFlow, sync::Arc};
 use teloxide::{
-    Bot,
     dispatching::{
         Dispatcher, DpHandlerDescription, HandlerExt, MessageFilterExt, UpdateFilterExt,
     },
     dptree,
     error_handlers::LoggingErrorHandler,
-    payloads::SendDocumentSetters,
+    payloads::{AnswerInlineQuerySetters, SendDocumentSetters},
     prelude::{ChatId, Handler, Message, Requester},
-    types::{Chat, InputFile, Me, MessageId, ParseMode, ThreadId, Update, User},
+    types::{
+        Chat, InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+        InlineQueryResultArticle, InputFile, InputMessageContent, InputMessageContentText, Me,
+        MessageId, ParseMode, ThreadId, Update, User,
+    },
     update_listeners::Polling,
     utils::{command::BotCommands, html},
+    Bot,
 };
-use crate::bot::inlines::cobalter::handle_inline_video;
 
 async fn root_handler(
     update: Update,
@@ -53,11 +62,107 @@ async fn root_handler(
     Ok(())
 }
 
+async fn is_user_registered(q: InlineQuery) -> bool {
+    let user_id_str = q.from.id.to_string();
+    DBUser::find_one(doc! { "user_id": &user_id_str })
+        .await
+        .map_or(false, |user| user.is_some())
+}
+
+async fn prompt_registration(bot: Bot, q: InlineQuery, me: Me) -> Result<(), MyError> {
+    let user_id_str = q.from.id.to_string();
+    debug!("User {} not found. Offering to register.", user_id_str);
+
+    let start_url = format!("https://t.me/{}?start=inl", me.username());
+
+    let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::url(
+        "▶️ Зарегистрироваться".to_string(),
+        start_url.parse()?,
+    )]]);
+
+    let article = InlineQueryResultArticle::new(
+        "register_prompt",
+        "Вы не зарегистрированы",
+        InputMessageContent::Text(InputMessageContentText::new(
+            "Чтобы использовать бота, пожалуйста, сначала начните диалог с ним.",
+        )),
+    )
+        .description("Нажмите здесь, чтобы начать чат с ботом и разблокировать все функции.")
+        .reply_markup(keyboard);
+
+    if let Err(e) = bot
+        .answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
+        .cache_time(10)
+        .await
+    {
+        error!("Failed to send 'register' inline prompt: {:?}", e);
+    }
+
+    Ok(())
+}
+
+#[derive(Deserialize)]
+struct EnabledCheck {
+    enabled: bool,
+}
+
+async fn are_any_inline_modules_enabled(q: InlineQuery) -> bool {
+    let owner = Owner {
+        id: q.from.id.to_string(),
+        r#type: "user".to_string(),
+    };
+
+    if let Ok(settings) = Settings::get_or_create(&owner).await {
+        for module in MOD_MANAGER.get_all_modules() {
+            if module.enabled_for(&*owner.r#type) {
+                if let Some(settings_json) = settings.modules.get(module.key()) {
+                    if let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
+                    {
+                        if check.enabled {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+async fn send_modules_disabled_message(bot: Bot, q: InlineQuery) -> Result<(), MyError> {
+    let article = InlineQueryResultArticle::new(
+        "modules_disabled",
+        "Все модули выключены",
+        InputMessageContent::Text(InputMessageContentText::new(
+            "Все инлайн-модули выключены. Чтобы ими воспользоваться, активируйте их в настройках.",
+        )),
+    )
+        .description("Используйте /settings в чате с ботом, чтобы включить их.");
+
+    bot.answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
+        .cache_time(10)
+        .await?;
+    Ok(())
+}
+
 pub fn inline_query_handler() -> Handler<'static, Result<(), MyError>, DpHandlerDescription> {
     dptree::entry()
-        .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
-        .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
-        .branch(dptree::filter_async(is_whisper_query).endpoint(handle_whisper_inline))
+        .branch(
+            dptree::filter_async(|q: InlineQuery| async move { !is_user_registered(q).await })
+                .endpoint(prompt_registration),
+        )
+        .branch(
+            dptree::filter_async(is_user_registered)
+                .filter_async(|q: InlineQuery| async move { !are_any_inline_modules_enabled(q).await })
+                .endpoint(send_modules_disabled_message),
+        )
+        .branch(
+            dptree::filter_async(is_user_registered)
+                .filter_async(are_any_inline_modules_enabled)
+                .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
+                .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
+                .branch(dptree::filter_async(is_whisper_query).endpoint(handle_whisper_inline)),
+        )
 }
 
 async fn run_bot(config: Arc<Config>) -> Result<(), MyError> {
@@ -127,7 +232,7 @@ fn short_error_name(error: &MyError) -> String {
 }
 
 pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>, bot: Bot) {
-    error!("An error has occurred: {:?}", err); // ahh fuck
+    error!("An error has occurred: {:?}", err);
 
     let (user, chat) = extract_info(&update);
     let mut message_text = String::new();
@@ -143,7 +248,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
             "<b>В чате:</b> <code>{}</code>{}",
             chat.id, title
         )
-        .unwrap();
+            .unwrap();
     } else {
         writeln!(&mut message_text, "<b>В чате:</b> <i>(???)</i>").unwrap();
     }
@@ -159,7 +264,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
             "<b>Вызвал:</b> {} (<code>{}</code>){}",
             full_name, user.id, username
         )
-        .unwrap();
+            .unwrap();
     } else {
         writeln!(&mut message_text, "<b>Вызвал:</b> <i>(???)</i>").unwrap();
     }
@@ -170,7 +275,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
         "\n<b>Ошибка:</b>\n<blockquote expandable>{}</blockquote>",
         html::escape(&error_name)
     )
-    .unwrap();
+        .unwrap();
 
     let hashtag = "#error";
     writeln!(&mut message_text, "\n{}", hashtag).unwrap();

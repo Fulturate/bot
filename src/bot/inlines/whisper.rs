@@ -16,7 +16,6 @@ use teloxide::{
     utils::html,
 };
 use uuid::Uuid;
-use crate::bot::modules::cobalt::CobaltSettings;
 use crate::bot::modules::Owner;
 use crate::bot::modules::whisper::WhisperSettings;
 use crate::core::db::schemas::settings::Settings;

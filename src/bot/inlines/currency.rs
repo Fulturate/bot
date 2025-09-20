@@ -2,21 +2,19 @@ use crate::{
     bot::modules::{Owner, currency::CurrencySettings},
     core::{
         config::Config,
-        db::schemas::{settings::Settings, user::User},
+        db::schemas::{settings::Settings},
         services::currency::converter::CURRENCY_REGEX,
     },
     errors::MyError,
 };
 use log::{debug, error};
-use mongodb::bson::doc;
-use oximod::Model;
 use std::sync::Arc;
 use teloxide::{
     Bot,
     payloads::AnswerInlineQuerySetters,
     prelude::Requester,
     types::{
-        InlineKeyboardButton, InlineKeyboardMarkup, InlineQuery, InlineQueryResult,
+        InlineQuery, InlineQueryResult,
         InlineQueryResultArticle, InputMessageContent, InputMessageContentText, Me, ParseMode,
     },
 };
@@ -48,45 +46,8 @@ pub async fn handle_currency_inline(
     bot: Bot,
     q: InlineQuery,
     config: Arc<Config>,
-    me: Me,
+    _me: Me,
 ) -> Result<(), MyError> {
-    let user_id_str = q.from.id.to_string();
-
-    let user_exists = User::find_one(doc! { "user_id": &user_id_str })
-        .await?
-        .is_some();
-
-    if !user_exists {
-        debug!("User {} not found. Offering to register.", user_id_str);
-
-        let start_url = format!("https://t.me/{}?start=inl", me.username());
-
-        let keyboard = InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::url(
-            "▶️ Register".to_string(),
-            start_url.parse()?,
-        )]]);
-
-        let article = InlineQueryResultArticle::new(
-            "register_prompt",
-            "You are not registered",
-            InputMessageContent::Text(InputMessageContentText::new(
-                "To use the bot, please start a conversation with it first.",
-            )),
-        )
-        .description("Click here to start a chat with the bot and unlock all features.")
-        .reply_markup(keyboard);
-
-        if let Err(e) = bot
-            .answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
-            .cache_time(10)
-            .await
-        {
-            error!("Failed to send 'register' inline prompt: {:?}", e);
-        }
-
-        return Ok(());
-    }
-
     debug!("Handling currency inline query: {}", &q.query);
 
     let converter = config.get_currency_converter();
