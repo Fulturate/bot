@@ -43,7 +43,7 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
                 .unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
-            let text = format!("{} — {}", status, module.description());
+            let text = format!("{} — {}", status, module.name());
 
             let callback_data =
                 format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
@@ -96,7 +96,7 @@ pub async fn update_settings_message(
                 .unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
-            let text = format!("{} — {}", status, module.description());
+            let text = format!("{} — {}", status, module.name());
             let callback_data =
                 format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
 

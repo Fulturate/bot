@@ -32,8 +32,13 @@ impl Module for WhisperModule {
     fn key(&self) -> &'static str {
         "whisper"
     }
+
+    fn name(&self) -> &'static str {
+        "Whisper System"
+    }
+
     fn description(&self) -> &'static str {
-        "Настройки для Whisper System"
+        "Модуль «шептать», позволяющая работать с текстовыми сообщениями в более приватном режиме. Протестировать можно через inlin'ы."
     }
 
     async fn get_settings_ui(

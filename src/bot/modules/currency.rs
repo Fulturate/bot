@@ -51,8 +51,12 @@ impl Module for CurrencyModule {
         "currency"
     }
 
+    fn name(&self) -> &'static str {
+        "Конвертер валют"
+    }
+
     fn description(&self) -> &'static str {
-        "Настройки конвертации валют"
+        "Возможность конвертировать валюты" // todo change this shit
     }
 
     async fn get_settings_ui(

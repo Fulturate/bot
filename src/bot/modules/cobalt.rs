@@ -36,8 +36,13 @@ impl Module for CobaltModule {
     fn key(&self) -> &'static str {
         "cobalt"
     }
+
+    fn name(&self) -> &'static str {
+        "Cobalt Downloader"
+    }
+
     fn description(&self) -> &'static str {
-        "Настройки для Cobalt Downloader"
+        "Возможность скачивать видео, фото, аудио" // todo change this shit
     }
 
     async fn get_settings_ui(

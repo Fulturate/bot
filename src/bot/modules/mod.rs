@@ -25,6 +25,8 @@ pub trait ModuleSettings:
 pub trait Module: Send + Sync {
     fn key(&self) -> &'static str;
 
+    fn name(&self) -> &'static str;
+
     fn description(&self) -> &'static str;
 
     async fn get_settings_ui(
