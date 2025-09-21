@@ -28,7 +28,7 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
     );
 
     let kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
-        .get_all_modules()
+        .get_designed_modules(&*owner_type)
         .into_iter()
         .map(|module| {
             let settings: serde_json::Value = settings_doc

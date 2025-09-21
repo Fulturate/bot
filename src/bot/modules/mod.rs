@@ -42,7 +42,10 @@ pub trait Module: Send + Sync {
         data: &str,
     ) -> Result<(), MyError>;
 
-    fn enabled_for(&self, owner_type: &str) -> bool;
+    // this function returns true if the module is designed for the owner type. like if module is designed for user, it will return true for user and false for group, and doesn't show in group
+    fn designed_for(&self, owner_type: &str) -> bool;
+
+    async fn is_enabled(&self, owner: &Owner) -> bool;
 
     fn factory_settings(&self) -> Result<serde_json::Value, MyError>;
 }

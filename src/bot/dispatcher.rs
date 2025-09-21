@@ -114,7 +114,7 @@ async fn are_any_inline_modules_enabled(q: InlineQuery) -> bool {
 
     if let Ok(settings) = Settings::get_or_create(&owner).await {
         for module in MOD_MANAGER.get_all_modules() {
-            if module.enabled_for(&*owner.r#type) {
+            if module.is_enabled(&owner).await {
                 if let Some(settings_json) = settings.modules.get(module.key()) {
                     if let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
                     {

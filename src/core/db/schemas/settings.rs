@@ -33,7 +33,7 @@ impl Settings {
         let mut modules_map = BTreeMap::<String, Value>::new();
 
         for module in MOD_MANAGER.get_all_modules() {
-            if module.enabled_for(&owner.r#type) {
+            if module.designed_for(&owner.r#type) {
                 match module.factory_settings() {
                     Ok(settings_json) => {
                         modules_map.insert(module.key().to_string(), settings_json);

@@ -173,8 +173,18 @@ impl Module for CobaltModule {
         Ok(())
     }
 
-    fn enabled_for(&self, owner_type: &str) -> bool {
+    fn designed_for(&self, owner_type: &str) -> bool {
         owner_type == "user" // user
+    }
+
+    async fn is_enabled(&self, owner: &Owner) -> bool {
+        if !self.designed_for(&*owner.r#type) {
+            return false;
+        }
+
+        let settings: CobaltSettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps
+
+        settings.enabled
     }
 
     fn factory_settings(&self) -> Result<serde_json::Value, MyError> {

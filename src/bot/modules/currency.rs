@@ -16,6 +16,7 @@ use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
+use crate::bot::modules::whisper::WhisperSettings;
 use crate::core::services::currency::converter::get_default_currencies;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -153,8 +154,18 @@ impl Module for CurrencyModule {
         Ok(())
     }
 
-    fn enabled_for(&self, _owner_type: &str) -> bool {
+    fn designed_for(&self, _owner_type: &str) -> bool {
         true // all
+    }
+
+    async fn is_enabled(&self, owner: &Owner) -> bool {
+        if !self.designed_for(&*owner.r#type) {
+            return false;
+        }
+
+        let settings: CurrencySettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps
+
+        settings.enabled
     }
 
     fn factory_settings(&self) -> Result<serde_json::Value, MyError> {

@@ -27,6 +27,10 @@ impl ModuleManager {
     pub fn get_all_modules(&self) -> Vec<&Arc<dyn Module>> {
         self.modules.values().collect()
     }
+
+    pub fn get_designed_modules(&self, owner_type: &str) -> Vec<&Arc<dyn Module>> {
+        self.modules.values().filter(|module| module.designed_for(owner_type)).collect()
+    }
 }
 
 pub static MOD_MANAGER: Lazy<ModuleManager> = Lazy::new(ModuleManager::new);
