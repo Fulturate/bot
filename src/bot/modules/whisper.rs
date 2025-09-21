@@ -32,7 +32,7 @@ impl Module for WhisperModule {
     }
 
     fn description(&self) -> &'static str {
-        "Модуль «шептать», позволяющая работать с текстовыми сообщениями в более приватном режиме. Протестировать можно через inlin'ы."
+        "Модуль «шептать», позволяющий работать с текстовыми сообщениями в более приватном режиме. Протестировать можно через inlin'ы: \"@fulturatebot *сообщение шепота* @username1 *id*\""
     }
 
     async fn get_settings_ui(
@@ -43,7 +43,8 @@ impl Module for WhisperModule {
         let settings: WhisperSettings = Settings::get_module_settings(owner, self.key()).await?;
 
         let text = format!(
-            "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}",
+            "⚙️ <b>Настройки модуля</b>: {}\n<blockquote>{}</blockquote>\nСтатус: {}",
+            self.name(),
             self.description(),
             if settings.enabled { "✅ Включен" } else { "❌ Выключен" }
         );

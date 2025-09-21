@@ -42,7 +42,10 @@ impl Module for CobaltModule {
     }
 
     fn description(&self) -> &'static str {
-        "Возможность скачивать видео, фото, аудио" // todo change this shit
+        "Можно скачивать видео, фото и аудио с популярных платформ: YouTube, TikTok, Reddit (только видео), Instagram, Bluesky, Bilibili, Dailymotion, Facebook, Loom, OK, Pinterest, Newgrounds, Snapchat, SoundCloud, Streamable, Tumblr, Twitch Clips, Twitter, Iméo, Xiaohongshu. \
+        Огромная благодарность создателям утилиты cobalt.tools.\n\n\
+        Модуль доступен через inlin'ы: \"@fulturatebot <i>ссылка на медиа</i>\"\n\
+        <i>Некоторые сервисы могут быть временно недоступны не по нашей вине из-за ограничений или изменений на стороне платформ.</i>"
     }
 
     async fn get_settings_ui(
@@ -53,7 +56,8 @@ impl Module for CobaltModule {
         let settings: CobaltSettings = Settings::get_module_settings(owner, self.key()).await?;
 
         let text = format!(
-            "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}",
+            "⚙️ <b>Настройки модуля</b>: {}\n<blockquote>{}</blockquote>\nСтатус: {}",
+            self.name(),
             self.description(),
             if settings.enabled { "✅ Включен" } else { "❌ Выключен" }
         );

@@ -21,8 +21,7 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
         "⚙️ <b>Настройки модулей</b>\n\n\
         Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
         ✅ – модуль включён\n\
-        ❌ – модуль выключен\n\n\
-        <i>Только тот, кто вызвал это сообщение, может управлять настройками.</i>"
+        ❌ – модуль выключен\n\n"
     );
 
     let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
@@ -81,8 +80,7 @@ pub async fn update_settings_message(
         "⚙️ <b>Настройки модулей</b>\n\n\
         Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
         ✅ – модуль включён\n\
-        ❌ – модуль выключен\n\n\
-        <i>Только тот, кто вызвал это сообщение, может управлять настройками.</i>"
+        ❌ – модуль выключен\n\n"
     );
 
     let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER

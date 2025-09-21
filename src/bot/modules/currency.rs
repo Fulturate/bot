@@ -51,7 +51,7 @@ impl Module for CurrencyModule {
     }
 
     fn description(&self) -> &'static str {
-        "Возможность конвертировать валюты" // todo change this shit
+        "Конвертация валют и криптовалют с актуальными курсами"
     }
 
     async fn get_settings_ui(
@@ -159,7 +159,8 @@ impl CurrencyModule {
     ) -> Result<(String, InlineKeyboardMarkup), MyError> {
         let settings: CurrencySettings = Settings::get_module_settings(owner, self.key()).await?;
         let text = format!(
-            "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}\n\nВыберите валюты для отображения.",
+            "⚙️ <b>Настройки модуля</b>: {}\n<blockquote>{}</blockquote>\nСтатус: {}\n\nВыберите валюты для отображения.",
+            self.name(),
             self.description(),
             if settings.enabled { "✅ Включен" } else { "❌ Выключен" }
         );
