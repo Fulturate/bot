@@ -7,13 +7,14 @@ pub enum Command {
     Start(String),
     #[command(description = "Speech recognition", alias = "sr")]
     SpeechRecognition,
-    #[command(parse_with = "split", description = "Set currency to convert")]
-    SetCurrency { code: String },
-    #[command(description = "List of available currencies to convert")]
-    ListCurrency,
+    #[command(description = "Translate", alias = "tr")]
+    Translate(String),
+    #[command(description = "Bot settings")]
+    Settings,
 }
 
 pub struct AudioStruct {
     pub mime_type: String,
     pub file_id: String,
+    pub file_unique_id: String,
 }

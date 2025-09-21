@@ -1,10 +1,4 @@
-mod config;
-pub(crate) mod db;
-mod handlers;
-mod loader;
-mod util;
-
-use crate::loader::run;
+use fulturate::bot::dispatcher::run;
 use log::{error, info};
 
 #[tokio::main]
