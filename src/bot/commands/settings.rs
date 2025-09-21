@@ -27,7 +27,7 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
         ❌ – модуль выключен\n\n"
     );
 
-    let kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
+    let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
         .get_designed_modules(&*owner_type)
         .into_iter()
         .map(|module| {
@@ -51,6 +51,8 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
             vec![InlineKeyboardButton::callback(text, callback_data)]
         })
         .collect();
+
+    kb_buttons.push(vec![InlineKeyboardButton::callback("🗑️ Удалить данные с бота", "delete_data")]);
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 
@@ -81,8 +83,8 @@ pub async fn update_settings_message(
         ❌ – модуль выключен\n\n"
     );
 
-    let kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
-        .get_all_modules()
+    let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
+        .get_designed_modules(&*owner_type)
         .into_iter()
         .map(|module| {
             let settings: serde_json::Value = settings_doc
@@ -103,6 +105,8 @@ pub async fn update_settings_message(
             vec![InlineKeyboardButton::callback(text, callback_data)]
         })
         .collect();
+
+    kb_buttons.push(vec![InlineKeyboardButton::callback("🗑️ Удалить данные с бота", "delete_data")]);
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 

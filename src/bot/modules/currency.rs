@@ -16,7 +16,6 @@ use teloxide::{
     prelude::*,
     types::{InlineKeyboardButton, InlineKeyboardMarkup},
 };
-use crate::bot::modules::whisper::WhisperSettings;
 use crate::core::services::currency::converter::get_default_currencies;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

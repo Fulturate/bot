@@ -170,7 +170,7 @@ pub async fn summarization_handler(
 
     if let Some(cached_summary) = cache_entry.summary {
         let final_text = format!(
-            "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
+            "✨:\n<blockquote expandable>{}</blockquote>",
             cached_summary
         );
         bot.edit_message_text(message.chat.id, message.id, final_text)
@@ -205,7 +205,7 @@ pub async fn summarization_handler(
     cache.set(&file_cache_key, &cache_entry, 86400).await?;
 
     let final_text = format!(
-        "Краткое содержание:\n<blockquote expandable>{}</blockquote>",
+        "✨:\n<blockquote expandable>{}</blockquote>",
         new_summary
     );
     bot.edit_message_text(message.chat.id, message.id, final_text)

@@ -2,12 +2,15 @@ use crate::{
     bot::{
         callbacks::{
             cobalt_pagination::handle_cobalt_pagination,
-            delete::{handle_delete_confirmation, handle_delete_request},
+            delete::{
+                handle_delete_confirmation, handle_delete_data_confirmation,
+                handle_delete_request,
+            },
             translate::handle_translate_callback,
             whisper::handle_whisper_callback,
         },
         commands::settings::update_settings_message,
-        modules::{Owner, registry::MOD_MANAGER},
+        modules::{registry::MOD_MANAGER, Owner},
     },
     core::{
         config::Config,
@@ -17,10 +20,11 @@ use crate::{
 };
 use std::sync::Arc;
 use teloxide::{
-    Bot,
     payloads::EditMessageTextSetters,
     prelude::{CallbackQuery, Requester},
+    Bot,
 };
+use crate::bot::callbacks::delete::handle_delete_data;
 
 pub mod cobalt_pagination;
 pub mod delete;
@@ -42,6 +46,8 @@ enum CallbackAction<'a> {
         owner_id: &'a str,
     },
     CobaltPagination,
+    DeleteData,
+    DeleteDataConfirmation,
     DeleteMessage,
     DeleteConfirmation,
     Summarize,
@@ -88,6 +94,12 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
         return Some(CallbackAction::ModuleSettings { module_key, rest });
     }
 
+    if data.starts_with("delete_data_confirm:") {
+        return Some(CallbackAction::DeleteDataConfirmation);
+    }
+    if data == "delete_data" {
+        return Some(CallbackAction::DeleteData);
+    }
     if data.starts_with("delete_msg") {
         return Some(CallbackAction::DeleteMessage);
     }
@@ -125,10 +137,10 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
 
     match parse_callback_data(data) {
         Some(CallbackAction::ModuleSelect {
-            owner_type,
-            owner_id,
-            module_key,
-        }) => {
+                 owner_type,
+                 owner_id,
+                 module_key,
+             }) => {
             if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message)
             {
                 let owner = Owner {
@@ -143,9 +155,9 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
             }
         }
         Some(CallbackAction::SettingsBack {
-            owner_type,
-            owner_id,
-        }) => {
+                 owner_type,
+                 owner_id,
+             }) => {
             if let Some(message) = q.message {
                 update_settings_message(bot, message, owner_id.to_string(), owner_type.to_string())
                     .await?;
@@ -161,12 +173,16 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
                     } else {
                         "group"
                     })
-                    .to_string(),
+                        .to_string(),
                 };
                 module.handle_callback(bot, &q, &owner, rest).await?;
             }
         }
         Some(CallbackAction::CobaltPagination) => handle_cobalt_pagination(bot, q, config).await?,
+        Some(CallbackAction::DeleteData) => handle_delete_data(bot, q).await?,
+        Some(CallbackAction::DeleteDataConfirmation) => {
+            handle_delete_data_confirmation(bot, q).await?
+        }
         Some(CallbackAction::DeleteMessage) => handle_delete_request(bot, q).await?,
         Some(CallbackAction::DeleteConfirmation) => {
             handle_delete_confirmation(bot, q, &config).await?
