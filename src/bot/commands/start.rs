@@ -24,9 +24,9 @@ pub async fn start_handler(
 ) -> Result<(), MyError> {
     let mut is_new_user = false;
 
-    if message.chat.is_private() {
-        if let Some(user) = message.from {
-            if User::find_one(doc! { "user_id": &user.id.to_string() }).await?.is_none() {
+    if message.chat.is_private()
+        && let Some(user) = message.from
+            && User::find_one(doc! { "user_id": &user.id.to_string() }).await?.is_none() {
                 is_new_user = true;
                 User::new().user_id(user.id.to_string().clone()).save().await?;
 
@@ -36,8 +36,6 @@ pub async fn start_handler(
                 };
                 Settings::create_with_defaults(&owner).await?;
             }
-        }
-    }
 
     let version = config.get_version();
 

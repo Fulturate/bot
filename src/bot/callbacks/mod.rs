@@ -70,8 +70,8 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
 
     if let Some(rest) = data.strip_prefix("module_select:") {
         let parts: Vec<_> = rest.split(':').collect();
-        if parts.len() == 4 {
-            if let Ok(commander_id) = parts[3].parse() {
+        if parts.len() == 4
+            && let Ok(commander_id) = parts[3].parse() {
                 return Some(CallbackAction::ModuleSelect {
                     owner_type: parts[0],
                     owner_id: parts[1],
@@ -79,20 +79,18 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
                     commander_id,
                 });
             }
-        }
     }
 
     if let Some(rest) = data.strip_prefix("settings_back:") {
         let parts: Vec<_> = rest.split(':').collect();
-        if parts.len() == 3 {
-            if let Ok(commander_id) = parts[2].parse() {
+        if parts.len() == 3
+            && let Ok(commander_id) = parts[2].parse() {
                 return Some(CallbackAction::SettingsBack {
                     owner_type: parts[0],
                     owner_id: parts[1],
                     commander_id,
                 });
             }
-        }
     }
 
     if let Some(module_key) = MOD_MANAGER.get_all_modules().iter().find_map(|m| {
@@ -100,8 +98,8 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
     }) {
         let rest_with_id = data.strip_prefix(&format!("{}:settings:", module_key)).unwrap_or("");
         let parts: Vec<_> = rest_with_id.rsplitn(2, ':').collect();
-        if parts.len() == 2 {
-            if let Ok(commander_id) = parts[0].parse() {
+        if parts.len() == 2
+            && let Ok(commander_id) = parts[0].parse() {
                 let rest = parts[1];
                 return Some(CallbackAction::ModuleSettings {
                     module_key,
@@ -109,14 +107,12 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
                     commander_id,
                 });
             }
-        }
     }
 
-    if let Some(commander_id_str) = data.strip_prefix("delete_data:") {
-        if let Ok(commander_id) = commander_id_str.parse() {
+    if let Some(commander_id_str) = data.strip_prefix("delete_data:")
+        && let Ok(commander_id) = commander_id_str.parse() {
             return Some(CallbackAction::DeleteData { commander_id });
         }
-    }
 
     if data.starts_with("delete_data_confirm:") { return Some(CallbackAction::DeleteDataConfirmation); }
     if data.starts_with("delete_msg") { return Some(CallbackAction::DeleteMessage); }

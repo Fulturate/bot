@@ -66,7 +66,7 @@ async fn is_user_registered(q: InlineQuery) -> bool {
     let user_id_str = q.from.id.to_string();
     DBUser::find_one(doc! { "user_id": &user_id_str })
         .await
-        .map_or(false, |user| user.is_some())
+        .is_ok_and(|user| user.is_some())
 }
 
 async fn prompt_registration(bot: Bot, q: InlineQuery, me: Me) -> Result<(), MyError> {
@@ -114,16 +114,12 @@ async fn are_any_inline_modules_enabled(q: InlineQuery) -> bool {
 
     if let Ok(settings) = Settings::get_or_create(&owner).await {
         for module in MOD_MANAGER.get_all_modules() {
-            if module.is_enabled(&owner).await {
-                if let Some(settings_json) = settings.modules.get(module.key()) {
-                    if let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
-                    {
-                        if check.enabled {
+            if module.is_enabled(&owner).await
+                && let Some(settings_json) = settings.modules.get(module.key())
+                    && let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
+                        && check.enabled {
                             return true;
                         }
-                    }
-                }
-            }
         }
     }
     false

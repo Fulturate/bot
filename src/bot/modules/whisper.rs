@@ -11,15 +11,11 @@ use teloxide::{
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Default)]
 pub struct WhisperSettings {
     pub enabled: bool,
 }
 
-impl Default for WhisperSettings {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
 
 impl ModuleSettings for WhisperSettings {}
 
@@ -105,7 +101,7 @@ impl Module for WhisperModule {
     }
 
     async fn is_enabled(&self, owner: &Owner) -> bool {
-        if !self.designed_for(&*owner.r#type) {
+        if !self.designed_for(&owner.r#type) {
             return false;
         }
         let settings: WhisperSettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps

@@ -44,11 +44,10 @@ async fn has_data_delete_permission(
     if chat.is_private() {
         return true;
     }
-    if chat.is_group() || chat.is_supergroup() {
-        if let Ok(member) = bot.get_chat_member(chat.id, clicker.id).await {
+    if (chat.is_group() || chat.is_supergroup())
+        && let Ok(member) = bot.get_chat_member(chat.id, clicker.id).await {
             return member.is_owner();
         }
-    }
     false
 }
 
@@ -57,7 +56,7 @@ pub async fn handle_delete_data(bot: Bot, query: CallbackQuery) -> Result<(), My
         return Ok(());
     };
 
-    let can_delete = has_data_delete_permission(&bot, &message.chat(), &query.from).await;
+    let can_delete = has_data_delete_permission(&bot, message.chat(), &query.from).await;
 
     if !can_delete {
         bot.answer_callback_query(query.id)

@@ -131,7 +131,7 @@ impl Module for CurrencyModule {
     }
 
     async fn is_enabled(&self, owner: &Owner) -> bool {
-        if !self.designed_for(&*owner.r#type) {
+        if !self.designed_for(&owner.r#type) {
             return false;
         }
         let settings: CurrencySettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps

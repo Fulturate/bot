@@ -23,7 +23,7 @@ impl VideoQuality {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_quality(s: &str) -> Self {
         match s {
             "1080" => VideoQuality::Q1080,
             "1440" => VideoQuality::Q1440,

@@ -149,7 +149,7 @@ impl Module for CobaltModule {
 
         match (parts[1], parts[2]) {
             ("quality", val) => {
-                settings.video_quality = VideoQuality::from_str(val);
+                settings.video_quality = VideoQuality::parse_quality(val);
             }
             ("attribution", val) => {
                 settings.attribution = val.parse().unwrap_or(false);
@@ -173,7 +173,7 @@ impl Module for CobaltModule {
     }
 
     async fn is_enabled(&self, owner: &Owner) -> bool {
-        if !self.designed_for(&*owner.r#type) {
+        if !self.designed_for(&owner.r#type) {
             return false;
         }
         let settings: CobaltSettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps
