@@ -61,6 +61,9 @@ pub enum MyError {
 
     #[error("Serde json error: {0}")]
     SerdeJson(#[from] serde_json::Error),
+
+    #[error("User not found")]
+    UserNotFound,
 }
 
 impl From<&str> for MyError {

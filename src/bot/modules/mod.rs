@@ -5,7 +5,7 @@ pub mod whisper;
 
 use crate::errors::MyError;
 use async_trait::async_trait;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use teloxide::{prelude::*, types::InlineKeyboardMarkup};
 
@@ -17,7 +17,7 @@ pub struct Owner {
 
 #[async_trait]
 pub trait ModuleSettings:
-    Sized + Default + Serialize + DeserializeOwned + Debug + Send + Sync
+Sized + Default + Serialize + DeserializeOwned + Debug + Send + Sync
 {
 }
 
@@ -32,6 +32,7 @@ pub trait Module: Send + Sync {
     async fn get_settings_ui(
         &self,
         owner: &Owner,
+        commander_id: u64,
     ) -> Result<(String, InlineKeyboardMarkup), MyError>;
 
     async fn handle_callback(
@@ -40,6 +41,7 @@ pub trait Module: Send + Sync {
         q: &CallbackQuery,
         owner: &Owner,
         data: &str,
+        commander_id: u64,
     ) -> Result<(), MyError>;
 
     // this function returns true if the module is designed for the owner type. like if module is designed for user, it will return true for user and false for group, and doesn't show in group

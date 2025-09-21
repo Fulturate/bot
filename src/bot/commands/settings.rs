@@ -6,13 +6,10 @@ use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage};
 
 pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), MyError> {
+    let commander_id = message.from().map(|u| u.id.0).ok_or(MyError::UserNotFound)?;
+
     let owner_id = message.chat.id.to_string();
-    let owner_type = if message.chat.is_private() {
-        "user"
-    } else {
-        "group"
-    }
-        .to_string();
+    let owner_type = if message.chat.is_private() { "user" } else { "group" }.to_string();
 
     let settings_doc = Settings::get_or_create(&Owner {
         id: owner_id.clone(),
@@ -24,7 +21,8 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
         "⚙️ <b>Настройки модулей</b>\n\n\
         Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
         ✅ – модуль включён\n\
-        ❌ – модуль выключен\n\n"
+        ❌ – модуль выключен\n\n\
+        <i>Только тот, кто вызвал это сообщение, может управлять настройками.</i>"
     );
 
     let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
@@ -37,22 +35,24 @@ pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), 
                 .cloned()
                 .unwrap_or_default();
 
-            let is_enabled = settings
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let is_enabled = settings.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
             let text = format!("{} — {}", status, module.name());
 
-            let callback_data =
-                format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
+            let callback_data = format!(
+                "module_select:{}:{}:{}:{}",
+                owner_type, owner_id, module.key(), commander_id
+            );
 
             vec![InlineKeyboardButton::callback(text, callback_data)]
         })
         .collect();
 
-    kb_buttons.push(vec![InlineKeyboardButton::callback("🗑️ Удалить данные с бота", "delete_data")]);
+    kb_buttons.push(vec![InlineKeyboardButton::callback(
+        "🗑️ Удалить данные с бота",
+        format!("delete_data:{}", commander_id),
+    )]);
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 
@@ -69,6 +69,7 @@ pub async fn update_settings_message(
     message: MaybeInaccessibleMessage,
     owner_id: String,
     owner_type: String,
+    commander_id: u64,
 ) -> Result<(), MyError> {
     let settings_doc = Settings::get_or_create(&Owner {
         id: owner_id.clone(),
@@ -80,7 +81,8 @@ pub async fn update_settings_message(
         "⚙️ <b>Настройки модулей</b>\n\n\
         Нажмите на кнопку, чтобы включить или выключить соответствующий модуль.\n\
         ✅ – модуль включён\n\
-        ❌ – модуль выключен\n\n"
+        ❌ – модуль выключен\n\n\
+        <i>Только тот, кто вызвал это сообщение, может управлять настройками.</i>"
     );
 
     let mut kb_buttons: Vec<Vec<InlineKeyboardButton>> = MOD_MANAGER
@@ -92,21 +94,24 @@ pub async fn update_settings_message(
                 .get(module.key())
                 .cloned()
                 .unwrap_or_default();
-            let is_enabled = settings
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false);
+            let is_enabled = settings.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false);
 
             let status = if is_enabled { "✅" } else { "❌" };
             let text = format!("{} — {}", status, module.name());
-            let callback_data =
-                format!("module_select:{}:{}:{}", owner_type, owner_id, module.key());
+
+            let callback_data = format!(
+                "module_select:{}:{}:{}:{}",
+                owner_type, owner_id, module.key(), commander_id
+            );
 
             vec![InlineKeyboardButton::callback(text, callback_data)]
         })
         .collect();
 
-    kb_buttons.push(vec![InlineKeyboardButton::callback("🗑️ Удалить данные с бота", "delete_data")]);
+    kb_buttons.push(vec![InlineKeyboardButton::callback(
+        "🗑️ Удалить данные с бота",
+        format!("delete_data:{}", commander_id),
+    )]);
 
     let keyboard = InlineKeyboardMarkup::new(kb_buttons);
 

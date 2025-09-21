@@ -48,26 +48,19 @@ impl Module for CobaltModule {
     async fn get_settings_ui(
         &self,
         owner: &Owner,
+        commander_id: u64,
     ) -> Result<(String, InlineKeyboardMarkup), MyError> {
         let settings: CobaltSettings = Settings::get_module_settings(owner, self.key()).await?;
 
         let text = format!(
             "⚙️ <b>Настройки модуля</b>: {}\n\nСтатус: {}",
             self.description(),
-            if settings.enabled {
-                "✅ Включен"
-            } else {
-                "❌ Выключен"
-            }
+            if settings.enabled { "✅ Включен" } else { "❌ Выключен" }
         );
 
         let toggle_button = InlineKeyboardButton::callback(
-            if settings.enabled {
-                "Выключить модуль"
-            } else {
-                "Включить модуль"
-            },
-            format!("{}:settings:toggle_module", self.key()),
+            if settings.enabled { "Выключить модуль" } else { "Включить модуль" },
+            format!("{}:settings:toggle_module:{}", self.key(), commander_id),
         );
 
         let quality_options = [
@@ -84,7 +77,12 @@ impl Module for CobaltModule {
                 } else {
                     format!("{}p", q.as_str())
                 };
-                let cb_data = format!("{}:settings:set:quality:{}", self.key(), q.as_str());
+                let cb_data = format!(
+                    "{}:settings:set:quality:{}:{}",
+                    self.key(),
+                    q.as_str(),
+                    commander_id
+                );
                 InlineKeyboardButton::callback(display_text, cb_data)
             })
             .collect::<Vec<_>>();
@@ -95,9 +93,10 @@ impl Module for CobaltModule {
             "Атрибуция: Выкл ❌"
         };
         let attr_cb = format!(
-            "{}:settings:set:attribution:{}",
+            "{}:settings:set:attribution:{}:{}",
             self.key(),
-            !settings.attribution
+            !settings.attribution,
+            commander_id
         );
 
         let keyboard = InlineKeyboardMarkup::new(vec![
@@ -107,7 +106,7 @@ impl Module for CobaltModule {
             vec![InlineKeyboardButton::callback(attr_text, attr_cb)],
             vec![InlineKeyboardButton::callback(
                 "⬅️ Назад",
-                format!("settings_back:{}:{}", owner.r#type, owner.id),
+                format!("settings_back:{}:{}:{}", owner.r#type, owner.id, commander_id),
             )],
         ]);
 
@@ -120,14 +119,10 @@ impl Module for CobaltModule {
         q: &CallbackQuery,
         owner: &Owner,
         data: &str,
+        commander_id: u64,
     ) -> Result<(), MyError> {
-        let Some(message) = &q.message else {
-            return Ok(());
-        };
-
-        let Some(message) = message.regular_message() else {
-            return Ok(());
-        };
+        let Some(message) = &q.message else { return Ok(()); };
+        let Some(message) = message.regular_message() else { return Ok(()); };
 
         let parts: Vec<_> = data.split(':').collect();
 
@@ -137,7 +132,7 @@ impl Module for CobaltModule {
             settings.enabled = !settings.enabled;
             Settings::update_module_settings(owner, self.key(), settings).await?;
 
-            let (text, keyboard) = self.get_settings_ui(owner).await?;
+            let (text, keyboard) = self.get_settings_ui(owner, commander_id).await?;
             bot.edit_message_text(message.chat.id, message.id, text)
                 .reply_markup(keyboard)
                 .parse_mode(teloxide::types::ParseMode::Html)
@@ -164,7 +159,7 @@ impl Module for CobaltModule {
 
         Settings::update_module_settings(owner, self.key(), settings).await?;
 
-        let (text, keyboard) = self.get_settings_ui(owner).await?;
+        let (text, keyboard) = self.get_settings_ui(owner, commander_id).await?;
         bot.edit_message_text(message.chat.id, message.id, text)
             .reply_markup(keyboard)
             .parse_mode(teloxide::types::ParseMode::Html)
@@ -174,16 +169,14 @@ impl Module for CobaltModule {
     }
 
     fn designed_for(&self, owner_type: &str) -> bool {
-        owner_type == "user" // user
+        owner_type == "user"
     }
 
     async fn is_enabled(&self, owner: &Owner) -> bool {
         if !self.designed_for(&*owner.r#type) {
             return false;
         }
-
         let settings: CobaltSettings = Settings::get_module_settings(owner, self.key()).await.unwrap(); // god of unwraps
-
         settings.enabled
     }
 

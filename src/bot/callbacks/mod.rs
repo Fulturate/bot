@@ -3,7 +3,7 @@ use crate::{
         callbacks::{
             cobalt_pagination::handle_cobalt_pagination,
             delete::{
-                handle_delete_confirmation, handle_delete_data_confirmation,
+                handle_delete_confirmation, handle_delete_data, handle_delete_data_confirmation,
                 handle_delete_request,
             },
             translate::handle_translate_callback,
@@ -24,7 +24,7 @@ use teloxide::{
     prelude::{CallbackQuery, Requester},
     Bot,
 };
-use crate::bot::callbacks::delete::handle_delete_data;
+use teloxide::payloads::AnswerCallbackQuerySetters;
 
 pub mod cobalt_pagination;
 pub mod delete;
@@ -35,18 +35,23 @@ enum CallbackAction<'a> {
     ModuleSettings {
         module_key: &'a str,
         rest: &'a str,
+        commander_id: u64,
     },
     ModuleSelect {
         owner_type: &'a str,
         owner_id: &'a str,
         module_key: &'a str,
+        commander_id: u64,
     },
     SettingsBack {
         owner_type: &'a str,
         owner_id: &'a str,
+        commander_id: u64,
+    },
+    DeleteData {
+        commander_id: u64,
     },
     CobaltPagination,
-    DeleteData,
     DeleteDataConfirmation,
     DeleteMessage,
     DeleteConfirmation,
@@ -65,65 +70,63 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
 
     if let Some(rest) = data.strip_prefix("module_select:") {
         let parts: Vec<_> = rest.split(':').collect();
-        if parts.len() == 3 {
-            return Some(CallbackAction::ModuleSelect {
-                owner_type: parts[0],
-                owner_id: parts[1],
-                module_key: parts[2],
-            });
+        if parts.len() == 4 {
+            if let Ok(commander_id) = parts[3].parse() {
+                return Some(CallbackAction::ModuleSelect {
+                    owner_type: parts[0],
+                    owner_id: parts[1],
+                    module_key: parts[2],
+                    commander_id,
+                });
+            }
         }
     }
 
     if let Some(rest) = data.strip_prefix("settings_back:") {
         let parts: Vec<_> = rest.split(':').collect();
-        if parts.len() == 2 {
-            return Some(CallbackAction::SettingsBack {
-                owner_type: parts[0],
-                owner_id: parts[1],
-            });
+        if parts.len() == 3 {
+            if let Ok(commander_id) = parts[2].parse() {
+                return Some(CallbackAction::SettingsBack {
+                    owner_type: parts[0],
+                    owner_id: parts[1],
+                    commander_id,
+                });
+            }
         }
     }
 
     if let Some(module_key) = MOD_MANAGER.get_all_modules().iter().find_map(|m| {
-        data.starts_with(&format!("{}:settings:", m.key()))
-            .then_some(m.key())
+        data.starts_with(&format!("{}:settings:", m.key())).then_some(m.key())
     }) {
-        let rest = data
-            .strip_prefix(&format!("{}:settings:", module_key))
-            .unwrap_or("");
-        return Some(CallbackAction::ModuleSettings { module_key, rest });
+        let rest_with_id = data.strip_prefix(&format!("{}:settings:", module_key)).unwrap_or("");
+        let parts: Vec<_> = rest_with_id.rsplitn(2, ':').collect();
+        if parts.len() == 2 {
+            if let Ok(commander_id) = parts[0].parse() {
+                let rest = parts[1];
+                return Some(CallbackAction::ModuleSettings {
+                    module_key,
+                    rest,
+                    commander_id,
+                });
+            }
+        }
     }
 
-    if data.starts_with("delete_data_confirm:") {
-        return Some(CallbackAction::DeleteDataConfirmation);
+    if let Some(commander_id_str) = data.strip_prefix("delete_data:") {
+        if let Ok(commander_id) = commander_id_str.parse() {
+            return Some(CallbackAction::DeleteData { commander_id });
+        }
     }
-    if data == "delete_data" {
-        return Some(CallbackAction::DeleteData);
-    }
-    if data.starts_with("delete_msg") {
-        return Some(CallbackAction::DeleteMessage);
-    }
-    if data.starts_with("delete_confirm:") {
-        return Some(CallbackAction::DeleteConfirmation);
-    }
-    if data.starts_with("summarize") {
-        return Some(CallbackAction::Summarize);
-    }
-    if data.starts_with("speech:page:") {
-        return Some(CallbackAction::SpeechPage);
-    }
-    if data.starts_with("back_to_full") {
-        return Some(CallbackAction::BackToFull);
-    }
-    if data.starts_with("whisper") {
-        return Some(CallbackAction::Whisper);
-    }
-    if data.starts_with("tr_") || data.starts_with("tr:") {
-        return Some(CallbackAction::Translate);
-    }
-    if data.starts_with("cobalt:") {
-        return Some(CallbackAction::CobaltPagination);
-    }
+
+    if data.starts_with("delete_data_confirm:") { return Some(CallbackAction::DeleteDataConfirmation); }
+    if data.starts_with("delete_msg") { return Some(CallbackAction::DeleteMessage); }
+    if data.starts_with("delete_confirm:") { return Some(CallbackAction::DeleteConfirmation); }
+    if data.starts_with("summarize") { return Some(CallbackAction::Summarize); }
+    if data.starts_with("speech:page:") { return Some(CallbackAction::SpeechPage); }
+    if data.starts_with("back_to_full") { return Some(CallbackAction::BackToFull); }
+    if data.starts_with("whisper") { return Some(CallbackAction::Whisper); }
+    if data.starts_with("tr_") || data.starts_with("tr:") { return Some(CallbackAction::Translate); }
+    if data.starts_with("cobalt:") { return Some(CallbackAction::CobaltPagination); }
 
     None
 }
@@ -131,62 +134,56 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
 pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
 
-    let Some(data) = &q.data else {
-        return Ok(());
-    };
+    let Some(data) = &q.data else { return Ok(()); };
 
     match parse_callback_data(data) {
-        Some(CallbackAction::ModuleSelect {
-                 owner_type,
-                 owner_id,
-                 module_key,
-             }) => {
-            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message)
-            {
-                let owner = Owner {
-                    id: owner_id.to_string(),
-                    r#type: owner_type.to_string(),
-                };
-                let (text, keyboard) = module.get_settings_ui(&owner).await?;
+        Some(CallbackAction::ModuleSelect { owner_type, owner_id, module_key, commander_id }) => {
+            if q.from.id.0 != commander_id {
+                bot.answer_callback_query(q.id).text("❌ Вы не можете управлять этими настройками.").show_alert(true).await?;
+                return Ok(());
+            }
+            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message) {
+                let owner = Owner { id: owner_id.to_string(), r#type: owner_type.to_string() };
+                let (text, keyboard) = module.get_settings_ui(&owner, commander_id).await?;
                 bot.edit_message_text(message.chat().id, message.id(), text)
                     .reply_markup(keyboard)
                     .parse_mode(teloxide::types::ParseMode::Html)
                     .await?;
             }
         }
-        Some(CallbackAction::SettingsBack {
-                 owner_type,
-                 owner_id,
-             }) => {
+        Some(CallbackAction::SettingsBack { owner_type, owner_id, commander_id }) => {
+            if q.from.id.0 != commander_id {
+                bot.answer_callback_query(q.id).text("❌ Вы не можете управлять этими настройками.").show_alert(true).await?;
+                return Ok(());
+            }
             if let Some(message) = q.message {
-                update_settings_message(bot, message, owner_id.to_string(), owner_type.to_string())
-                    .await?;
+                update_settings_message(bot, message, owner_id.to_string(), owner_type.to_string(), commander_id).await?;
             }
         }
-        Some(CallbackAction::ModuleSettings { module_key, rest }) => {
-            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message)
-            {
+        Some(CallbackAction::ModuleSettings { module_key, rest, commander_id }) => {
+            if q.from.id.0 != commander_id {
+                bot.answer_callback_query(q.id).text("❌ Вы не можете управлять этими настройками.").show_alert(true).await?;
+                return Ok(());
+            }
+            if let (Some(module), Some(message)) = (MOD_MANAGER.get_module(module_key), &q.message) {
                 let owner = Owner {
                     id: message.chat().id.to_string(),
-                    r#type: (if message.chat().is_private() {
-                        "user"
-                    } else {
-                        "group"
-                    })
-                        .to_string(),
+                    r#type: (if message.chat().is_private() { "user" } else { "group" }).to_string(),
                 };
-                module.handle_callback(bot, &q, &owner, rest).await?;
+                module.handle_callback(bot, &q, &owner, rest, commander_id).await?;
             }
         }
+        Some(CallbackAction::DeleteData { commander_id }) => {
+            if q.from.id.0 != commander_id {
+                bot.answer_callback_query(q.id).text("❌ Вы не можете управлять этими настройками.").show_alert(true).await?;
+                return Ok(());
+            }
+            handle_delete_data(bot, q).await?
+        }
         Some(CallbackAction::CobaltPagination) => handle_cobalt_pagination(bot, q, config).await?,
-        Some(CallbackAction::DeleteData) => handle_delete_data(bot, q).await?,
-        Some(CallbackAction::DeleteDataConfirmation) => {
-            handle_delete_data_confirmation(bot, q).await?
-        }
+        Some(CallbackAction::DeleteDataConfirmation) => handle_delete_data_confirmation(bot, q).await?,
         Some(CallbackAction::DeleteMessage) => handle_delete_request(bot, q).await?,
-        Some(CallbackAction::DeleteConfirmation) => {
-            handle_delete_confirmation(bot, q, &config).await?
-        }
+        Some(CallbackAction::DeleteConfirmation) => handle_delete_confirmation(bot, q, &config).await?,
         Some(CallbackAction::Summarize) => summarization_handler(bot, q, &config).await?,
         Some(CallbackAction::SpeechPage) => pagination_handler(bot, q, &config).await?,
         Some(CallbackAction::BackToFull) => back_handler(bot, q, &config).await?,
