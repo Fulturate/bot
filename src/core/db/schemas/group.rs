@@ -76,3 +76,14 @@ impl CurrenciesFunctions for Group {
         .await
     }
 }
+
+impl Group {
+    pub async fn get_or_create(id: &str) -> Result<bool, OxiModError> {
+        if Self::find_one(doc! { "group_id": id }).await?.is_some() {
+            Ok(false)
+        } else {
+            Self::new().group_id(id.to_string()).save().await?;
+            Ok(true)
+        }
+    }
+}

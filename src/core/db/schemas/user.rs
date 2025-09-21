@@ -79,6 +79,15 @@ impl CurrenciesFunctions for User {
 }
 
 impl User {
+    pub async fn get_or_create(id: &str) -> Result<bool, OxiModError> {
+        if Self::find_one(doc! { "user_id": id }).await?.is_some() {
+            Ok(false)
+        } else {
+            Self::new().user_id(id.to_string()).save().await?;
+            Ok(true)
+        }
+    }
+
     pub async fn increment_download_count(user_id: &str) -> Result<UpdateResult, OxiModError> {
         Self::update_one(
             doc! { "user_id": user_id },

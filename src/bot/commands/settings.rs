@@ -6,7 +6,7 @@ use teloxide::prelude::*;
 use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage};
 
 pub async fn settings_command_handler(bot: Bot, message: Message) -> Result<(), MyError> {
-    let commander_id = message.from().map(|u| u.id.0).ok_or(MyError::UserNotFound)?;
+    let commander_id = message.from.map(|u| u.id.0).ok_or(MyError::UserNotFound)?;
 
     let owner_id = message.chat.id.to_string();
     let owner_type = if message.chat.is_private() { "user" } else { "group" }.to_string();

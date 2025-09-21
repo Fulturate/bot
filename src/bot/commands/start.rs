@@ -14,6 +14,7 @@ use teloxide::{
     prelude::*,
     types::{ParseMode, ReplyParameters},
 };
+use teloxide::types::{InlineKeyboardButton, InlineKeyboardMarkup};
 
 pub async fn start_handler(
     bot: Bot,
@@ -21,29 +22,20 @@ pub async fn start_handler(
     config: &Config,
     _arg: String,
 ) -> Result<(), MyError> {
+    let mut is_new_user = false;
+
     if message.chat.is_private() {
-        let user = message.from.clone().unwrap();
+        if let Some(user) = message.from {
+            if User::find_one(doc! { "user_id": &user.id.to_string() }).await?.is_none() {
+                is_new_user = true;
+                User::new().user_id(user.id.to_string().clone()).save().await?;
 
-        if User::find_one(doc! { "user_id": &user.id.to_string() })
-            .await?
-            .is_none()
-        {
-            User::new()
-                .user_id(user.id.to_string().clone())
-                .save()
-                .await?;
-
-            let owner = Owner {
-                id: user.id.to_string(),
-                r#type: "user".to_string(),
-            };
-            Settings::create_with_defaults(&owner).await?;
-
-            bot.send_message(
-                message.chat.id,
-                "Welcome! You have been successfully registered",
-            )
-            .await?;
+                let owner = Owner {
+                    id: user.id.to_string(),
+                    r#type: "user".to_string(),
+                };
+                Settings::create_with_defaults(&owner).await?;
+            }
         }
     }
 
@@ -56,28 +48,47 @@ pub async fn start_handler(
     let mut system_info = System::new_all();
     system_info.refresh_all();
 
-    let total_ram_bytes = system_info.total_memory();
-    let used_ram_bytes = system_info.used_memory();
-
-    let total_ram_mb = total_ram_bytes / (1024 * 1024);
-    let used_ram_mb = used_ram_bytes / (1024 * 1024);
-
+    let total_ram_mb = system_info.total_memory() / (1024 * 1024);
+    let used_ram_mb = system_info.used_memory() / (1024 * 1024);
     let cpu_usage_percent = system_info.global_cpu_usage();
 
+    let welcome_part = if is_new_user {
+        "<b>Добро пожаловать!</b> 👋\n\n\
+            Я Fulturate — ваш многофункциональный ассистент. \
+            Чтобы посмотреть все возможности и настроить меня, используйте команду /settings.\n\n".to_string()
+    } else {
+        "<b>Fulturate тут!</b> ⚙️\n\n".to_string()
+    };
+
     let response_message = format!(
-        "<b>[BETA]</b> Telegram Bot by @Weever && @nixxoq\n\
+        "{welcome_part}\
+        <b>Статус системы:</b>\n\
         <pre>\
-        > <b>Version</b>: {}\n\
-        > <b>API Ping</b>: {} ms\n\
-        > <b>CPU Usage</b>: {:.2}%\n\
-        > <b>RAM Usage</b>: {}/{} MB\n\
+        > Версия:      {}\n\
+        > Пинг API:    {} мс\n\
+        > Нагрузка ЦП: {:.2}%\n\
+        > ОЗУ:         {}/{} МБ\n\
         </pre>",
         version, api_ping, cpu_usage_percent, used_ram_mb, total_ram_mb
+    );
+
+    let news_link_button =
+        InlineKeyboardButton::url("Канал с новостями", "https://t.me/fulturate".parse().unwrap());
+    let terms_of_use_link_button = InlineKeyboardButton::url(
+        "Условия использования",
+        "https://telegra.ph/Terms-Of-Use--Usloviya-ispolzovaniya-09-21"
+            .parse()
+            .unwrap(),
     );
 
     bot.send_message(message.chat.id, response_message)
         .reply_parameters(ReplyParameters::new(message.id))
         .parse_mode(ParseMode::Html)
+        .reply_markup(InlineKeyboardMarkup::new(vec![vec![
+            news_link_button,
+            terms_of_use_link_button,
+        ]]))
         .await?;
+
     Ok(())
 }
