@@ -95,7 +95,7 @@ impl Module for CurrencyModule {
             return Ok(());
         }
 
-        if parts.len() == 2 && parts[0] == "page" {
+        if parts.len() >= 2 && parts[0] == "page" {
             let page = parts[1].parse::<usize>().unwrap_or(0);
             let (text, keyboard) = self.get_paged_settings_ui(owner, page, commander_id).await?;
             bot.edit_message_text(message.chat.id, message.id, text)
@@ -105,7 +105,7 @@ impl Module for CurrencyModule {
             return Ok(());
         }
 
-        if parts.len() == 2 && parts[0] == "toggle" {
+        if parts.len() >= 2 && parts[0] == "toggle" {
             let currency_code = parts[1].to_string();
             let mut settings: CurrencySettings =
                 Settings::get_module_settings(owner, self.key()).await?;
@@ -183,6 +183,7 @@ impl CurrencyModule {
             .current_page(page)
             .add_bottom_row(vec![back_button])
             .set_callback_prefix(format!("{}:settings", self.key()))
+            .set_callback_formatter(move |p| format!("{}:settings:page:{}:{}", self.key(), p, commander_id))
             .build(|currency| {
                 let is_selected = settings.selected_codes.contains(&currency.code);
                 let icon = if is_selected { "✅" } else { "❌" };
