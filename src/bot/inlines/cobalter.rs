@@ -18,7 +18,7 @@ use teloxide::{
     prelude::*,
     types::{
         InlineQuery, InlineQueryResult, InlineQueryResultArticle, InlineQueryResultPhoto,
-        InputMessageContent, InputMessageContentText, InputFile, InputMedia, InputMediaVideo
+        InputFile, InputMedia, InputMediaVideo, InputMessageContent, InputMessageContentText,
     },
 };
 use url::Url;
