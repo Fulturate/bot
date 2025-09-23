@@ -55,7 +55,9 @@ enum CallbackAction<'a> {
     DeleteDataConfirmation,
     DeleteMessage,
     DeleteConfirmation,
-    Summarize,
+    Summarize {
+        user_id: u64,
+    },
     SpeechPage,
     BackToFull,
     Whisper,
@@ -135,8 +137,11 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
     if data.starts_with("delete_confirm:") {
         return Some(CallbackAction::DeleteConfirmation);
     }
-    if data.starts_with("summarize") {
-        return Some(CallbackAction::Summarize);
+    // if data.starts_with("summarize") {
+    if let Some(author_id) = data.strip_prefix("summarize:")
+        && let Ok(author_id) = author_id.parse()
+    {
+        return Some(CallbackAction::Summarize { user_id: author_id });
     }
     if data.starts_with("speech:page:") {
         return Some(CallbackAction::SpeechPage);
@@ -275,7 +280,7 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
         Some(CallbackAction::DeleteConfirmation) => {
             handle_delete_confirmation(bot, q, &config).await?
         }
-        Some(CallbackAction::Summarize) => summarization_handler(bot, q, &config).await?,
+        Some(CallbackAction::Summarize {user_id}) => summarization_handler(bot, q, &config, user_id).await?,
         Some(CallbackAction::SpeechPage) => pagination_handler(bot, q, &config).await?,
         Some(CallbackAction::BackToFull) => back_handler(bot, q, &config).await?,
         Some(CallbackAction::Whisper) => handle_whisper_callback(bot, q, &config).await?,

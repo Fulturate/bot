@@ -8,15 +8,19 @@ use crate::{
         services::translation::{SUPPORTED_LANGUAGES, normalize_language_code},
     },
     errors::MyError,
-    util::paginator::{FrameBuild, Paginator},
+    util::{
+        is_author,
+        paginator::{FrameBuild, Paginator},
+    },
 };
 use futures::future::join_all;
+use log::info;
 use teloxide::{
     ApiError, RequestError,
     prelude::*,
     types::{
         CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MaybeInaccessibleMessage,
-        Message, ParseMode,
+        Message, ParseMode, User,
     },
     utils::html::escape,
 };
@@ -29,11 +33,25 @@ pub async fn handle_translate_callback(
     config: &Config,
 ) -> Result<(), MyError> {
     if let (Some(data), Some(MaybeInaccessibleMessage::Regular(message))) = (&q.data, &q.message) {
+        if let Some(author_id) = data
+            .rsplit_once(":")
+            .and_then(|(_, last)| last.parse::<u64>().ok())
+            && !is_author(&q.from, author_id)
+        {
+            bot.answer_callback_query(q.id)
+                .text("❌ у вас нет прав использовать эту кнопку!")
+                .show_alert(true)
+                .await?;
+
+            return Ok(());
+        }
+
         bot.answer_callback_query(q.id.clone()).await?;
 
         if let Some(rest) = data.strip_prefix("tr:page:") {
             let parts: Vec<_> = rest.split(':').collect();
-            if parts.len() == 2 {
+            if parts.len() >= 2 {
+                info!("parts: {:#?}", parts);
                 let translation_id = parts[0];
                 if let Ok(page) = parts[1].parse::<usize>() {
                     handle_translation_pagination(&bot, message, translation_id, page, config)
@@ -44,7 +62,7 @@ pub async fn handle_translate_callback(
             handle_language_menu_pagination(bot, message, data).await?;
         } else if data.starts_with("tr_lang:") {
             handle_language_selection(bot, message, data, q.from.clone(), config).await?;
-        } else if data == "tr_show_langs" {
+        } else if data.starts_with("tr_show_langs") {
             handle_show_languages(&bot, message, &q.from, config).await?;
         }
     } else {
@@ -110,8 +128,14 @@ async fn handle_language_menu_pagination(
     message: &Message,
     data: &str,
 ) -> Result<(), MyError> {
-    if let Ok(page) = data.trim_start_matches("tr_page:").parse::<usize>() {
-        let keyboard = create_language_keyboard(page);
+    let parts = data
+        .strip_prefix("tr_page:")
+        .and_then(|rest| rest.rsplit_once(':'));
+
+    if let Some((page_str, user_id_str)) = parts
+        && let (Ok(page), Ok(user_id)) = (page_str.parse(), user_id_str.parse())
+    {
+        let keyboard = create_language_keyboard(page, user_id);
         if let Err(e) = bot
             .edit_message_reply_markup(message.chat.id, message.id)
             .reply_markup(keyboard)
@@ -128,10 +152,17 @@ async fn handle_language_selection(
     bot: Bot,
     message: &Message,
     data: &str,
-    user: teloxide::types::User,
+    user: User,
     config: &Config,
 ) -> Result<(), MyError> {
-    let target_lang = data.trim_start_matches("tr_lang:");
+    let Some(target_lang) = data
+        .trim_start_matches("tr_lang:")
+        .rsplit_once(":")
+        .and_then(|(lang, _)| Some(lang))
+    else {
+        return Ok(());
+    };
+
     let redis_client = config.get_redis_client();
 
     let redis_key_job = format!("translate_job:{}", user.id);
@@ -185,8 +216,10 @@ async fn handle_language_selection(
 
     if display_pages.len() <= 1 {
         let response = format!("<blockquote>{}</blockquote>", escape(&full_translated_text));
-        let switch_lang_button =
-            InlineKeyboardButton::callback(lang_display_name.to_string(), "tr_show_langs");
+        let switch_lang_button = InlineKeyboardButton::callback(
+            lang_display_name.to_string(),
+            format!("tr_show_langs:{}", user.id.0),
+        );
         let mut keyboard = delete_message_button(user.id.0);
         if let Some(first_row) = keyboard.inline_keyboard.get_mut(0) {
             first_row.insert(0, switch_lang_button);
@@ -234,7 +267,7 @@ async fn handle_language_selection(
 async fn handle_show_languages(
     bot: &Bot,
     message: &Message,
-    user: &teloxide::types::User,
+    user: &User,
     config: &Config,
 ) -> Result<(), MyError> {
     if let Some(original_message) = message.reply_to_message() {
@@ -262,7 +295,7 @@ async fn handle_show_languages(
         return Ok(());
     }
 
-    let keyboard = create_language_keyboard(0);
+    let keyboard = create_language_keyboard(0, user.id.0);
     bot.edit_message_text(
         message.chat.id,
         message.id,

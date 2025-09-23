@@ -2,7 +2,7 @@ use crate::{
     bot::keyboards::transcription::{create_summary_keyboard, create_transcription_keyboard},
     core::config::Config,
     errors::MyError,
-    util::{enums::AudioStruct, split_text},
+    util::{enums::AudioStruct, is_admin_or_author, split_text},
 };
 use bytes::Bytes;
 use gem_rs::{
@@ -141,10 +141,27 @@ pub async fn summarization_handler(
     bot: Bot,
     query: CallbackQuery,
     config: &Config,
+    user_id: u64,
 ) -> Result<(), MyError> {
     let Some(message) = query.message.and_then(|m| m.regular_message().cloned()) else {
         return Ok(());
     };
+
+    if !is_admin_or_author(
+        &bot,
+        message.chat.id,
+        message.chat.is_group() || message.chat.is_supergroup(),
+        &query.from,
+        user_id,
+    )
+    .await
+    {
+        bot.answer_callback_query(query.id)
+            .text("❌ у вас нет прав использовать эту кнопку!")
+            .show_alert(true)
+            .await?;
+        return Ok(());
+    }
 
     let cache = config.get_redis_client();
     let message_file_map_key = format!("message_file_map:{}", message.id);
@@ -204,10 +221,7 @@ pub async fn summarization_handler(
     cache_entry.summary = Some(new_summary.clone());
     cache.set(&file_cache_key, &cache_entry, 86400).await?;
 
-    let final_text = format!(
-        "✨:\n<blockquote expandable>{}</blockquote>",
-        new_summary
-    );
+    let final_text = format!("✨:\n<blockquote expandable>{}</blockquote>", new_summary);
     bot.edit_message_text(message.chat.id, message.id, final_text)
         .parse_mode(ParseMode::Html)
         .reply_markup(create_summary_keyboard())
@@ -291,7 +305,7 @@ pub async fn transcription_handler(
                 let cache = config.get_redis_client();
                 let message_file_map_key = format!("message_file_map:{}", message.id);
                 cache
-                    .set(&message_file_map_key, &file.file_unique_id, 3600)
+                    .set(&message_file_map_key, &file.file_unique_id, 86400)
                     .await?;
 
                 let text_parts = split_text(&cache_entry.full_text, 4000);

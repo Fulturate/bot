@@ -9,32 +9,15 @@ use crate::{
         services::speech_recognition::back_handler,
     },
     errors::MyError,
+    util::is_admin_or_author,
 };
 use log::error;
 use mongodb::bson::doc;
 use oximod::Model;
 use teloxide::{
     prelude::*,
-    types::{ChatId, InlineKeyboardButton, InlineKeyboardMarkup, User},
+    types::{InlineKeyboardButton, InlineKeyboardMarkup, User},
 };
-
-async fn has_delete_permission(
-    bot: &Bot,
-    chat_id: ChatId,
-    is_group: bool,
-    clicker: &User,
-    target_user_id: u64,
-) -> bool {
-    if target_user_id == 72 || clicker.id.0 == target_user_id {
-        return true;
-    }
-
-    if is_group && let Ok(member) = bot.get_chat_member(chat_id, clicker.id).await {
-        return member.is_privileged();
-    }
-
-    false
-}
 
 async fn has_data_delete_permission(
     bot: &Bot,
@@ -45,9 +28,10 @@ async fn has_data_delete_permission(
         return true;
     }
     if (chat.is_group() || chat.is_supergroup())
-        && let Ok(member) = bot.get_chat_member(chat.id, clicker.id).await {
-            return member.is_owner();
-        }
+        && let Ok(member) = bot.get_chat_member(chat.id, clicker.id).await
+    {
+        return member.is_owner();
+    }
     false
 }
 
@@ -117,14 +101,14 @@ pub async fn handle_delete_request(bot: Bot, query: CallbackQuery) -> Result<(),
         return Ok(());
     };
 
-    let can_delete = has_delete_permission(
+    let can_delete = is_admin_or_author(
         &bot,
         message.chat.id,
         message.chat.is_group() || message.chat.is_supergroup(),
         &query.from,
         target_user_id,
     )
-        .await;
+    .await;
 
     if !can_delete {
         bot.answer_callback_query(query.id)
@@ -140,8 +124,8 @@ pub async fn handle_delete_request(bot: Bot, query: CallbackQuery) -> Result<(),
         message.id,
         "Вы уверены, что хотите удалить?",
     )
-        .reply_markup(confirm_delete_keyboard(target_user_id))
-        .await?;
+    .reply_markup(confirm_delete_keyboard(target_user_id))
+    .await?;
 
     Ok(())
 }
@@ -168,14 +152,14 @@ pub async fn handle_delete_confirmation(
     };
     let action = parts[2];
 
-    let can_delete = has_delete_permission(
+    let can_delete = is_admin_or_author(
         &bot,
         message.chat.id,
         message.chat.is_group() || message.chat.is_supergroup(),
         &query.from,
         target_user_id,
     )
-        .await;
+    .await;
 
     if !can_delete {
         bot.answer_callback_query(query.id)
@@ -270,8 +254,8 @@ pub async fn handle_delete_data_confirmation(
                 message.id(),
                 "✅ Удаление данных отменено.",
             )
-                .reply_markup(InlineKeyboardMarkup::new(vec![vec![]]))
-                .await?;
+            .reply_markup(InlineKeyboardMarkup::new(vec![vec![]]))
+            .await?;
         }
         _ => {}
     }

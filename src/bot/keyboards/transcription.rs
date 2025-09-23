@@ -8,7 +8,7 @@ pub fn create_transcription_keyboard(
     total_pages: usize,
     user_id: u64,
 ) -> InlineKeyboardMarkup {
-    let summary_button = InlineKeyboardButton::callback("✨", "summarize");
+    let summary_button = InlineKeyboardButton::callback("✨", format!("summarize:{}", user_id));
     let delete_button = InlineKeyboardButton::callback("🗑️", format!("delete_msg:{}", user_id));
 
     Paginator::new(TRANSCRIPTION_MODULE_KEY, total_pages)
