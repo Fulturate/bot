@@ -18,6 +18,7 @@ use teloxide::{
     prelude::*,
     types::{FileId, MessageKind, ParseMode, ReplyParameters},
 };
+use teloxide::utils::html;
 
 #[derive(Debug, Serialize, Deserialize, FromRedisValue, ToRedisArgs, Clone)]
 pub struct TranscriptionCache {
@@ -221,7 +222,7 @@ pub async fn summarization_handler(
     cache_entry.summary = Some(new_summary.clone());
     cache.set(&file_cache_key, &cache_entry, 86400).await?;
 
-    let final_text = format!("✨:\n<blockquote expandable>{}</blockquote>", new_summary);
+    let final_text = format!("✨:\n<blockquote expandable>{}</blockquote>", html::escape(&new_summary));
     bot.edit_message_text(message.chat.id, message.id, final_text)
         .parse_mode(ParseMode::Html)
         .reply_markup(create_summary_keyboard())
@@ -319,7 +320,7 @@ pub async fn transcription_handler(
                 bot.edit_message_text(
                     msg.chat.id,
                     message.id,
-                    format!("<blockquote expandable>{}</blockquote>", text_parts[0]),
+                    format!("<blockquote expandable>{}</blockquote>", html::escape(&text_parts[0])),
                 )
                 .parse_mode(ParseMode::Html)
                 .reply_markup(keyboard)
