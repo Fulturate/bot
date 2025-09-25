@@ -2,6 +2,7 @@ pub mod cobalt;
 pub mod currency;
 pub mod registry;
 pub mod whisper;
+pub mod translate;
 
 use crate::errors::MyError;
 use async_trait::async_trait;

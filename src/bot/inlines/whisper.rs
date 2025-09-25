@@ -97,16 +97,6 @@ pub async fn handle_whisper_inline(
     q: InlineQuery,
     config: Arc<Config>,
 ) -> Result<(), MyError> {
-    let owner = Owner {
-        id: q.from.id.to_string(),
-        r#type: "user".to_string(),
-    };
-
-    let settings = Settings::get_module_settings::<WhisperSettings>(&owner, "whisper").await?;
-    if !settings.enabled {
-        return Ok(());
-    }
-
     if q.query.is_empty() {
         let article = InlineQueryResultArticle::new(
             "whisper_help",
@@ -277,7 +267,12 @@ pub async fn handle_whisper_inline(
     Ok(())
 }
 
-// TODO: impl module settings for whisper query
-pub async fn is_whisper_query(_q: InlineQuery) -> bool {
-    true
+pub async fn is_whisper_query(q: InlineQuery) -> bool {
+    let owner = Owner {
+        id: q.from.id.to_string(),
+        r#type: "user".to_string(),
+    };
+
+    let settings = Settings::get_module_settings::<WhisperSettings>(&owner, "whisper").await.unwrap();
+    settings.enabled
 }

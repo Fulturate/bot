@@ -41,6 +41,7 @@ use teloxide::{
     update_listeners::Polling,
     utils::{command::BotCommands, html},
 };
+use crate::bot::inlines::translate::{handle_translate_inline, is_translate_query};
 
 async fn root_handler(
     update: Update,
@@ -160,6 +161,7 @@ pub fn inline_query_handler() -> Handler<'static, Result<(), MyError>, DpHandler
                 .filter_async(are_any_inline_modules_enabled)
                 .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
                 .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
+                .branch(dptree::filter_async(is_translate_query).endpoint(handle_translate_inline))
                 .branch(dptree::filter_async(is_whisper_query).endpoint(handle_whisper_inline)),
         )
 }
