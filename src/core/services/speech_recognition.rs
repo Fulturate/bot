@@ -198,6 +198,14 @@ pub async fn summarization_handler(
         return Ok(());
     }
 
+    if let Some(text) = message.text() && text.contains("[no speech]") {
+        bot.edit_message_text(message.chat.id, message.id, "❌ Нельзя составить краткое содержание из аудио без речи.")
+            .parse_mode(ParseMode::Html)
+            .reply_markup(create_summary_keyboard())
+            .await?;
+        return Ok(());
+    }
+
     bot.edit_message_text(
         message.chat.id,
         message.id,
