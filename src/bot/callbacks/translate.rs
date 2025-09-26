@@ -157,8 +157,7 @@ async fn handle_language_selection(
 ) -> Result<(), MyError> {
     let Some(target_lang) = data
         .trim_start_matches("tr_lang:")
-        .rsplit_once(":")
-        .and_then(|(lang, _)| Some(lang))
+        .rsplit_once(":").map(|(lang, _)| lang)
     else {
         return Ok(());
     };
