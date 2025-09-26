@@ -24,3 +24,10 @@ pub fn create_summary_keyboard() -> InlineKeyboardMarkup {
         "back_to_full",
     )]])
 }
+
+pub fn create_retry_keyboard(message_id: i32, user_id: u64, action_type: &str, attempt: u32) -> InlineKeyboardMarkup {
+    InlineKeyboardMarkup::new(vec![vec![InlineKeyboardButton::callback(
+        "🔁 Повторить попытку",
+        format!("retry_speech:{}:{}:{}:{}", message_id, user_id, action_type, attempt),
+    )]/*, delete_message_button(user_id).inline_keyboard.first().unwrap().to_vec()*/])
+}

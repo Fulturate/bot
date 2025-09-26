@@ -25,6 +25,7 @@ use teloxide::{
     payloads::{AnswerCallbackQuerySetters, EditMessageTextSetters},
     prelude::{CallbackQuery, Requester},
 };
+use crate::core::services::speech_recognition::retry_speech_handler;
 
 pub mod cobalt_pagination;
 pub mod delete;
@@ -57,6 +58,12 @@ enum CallbackAction<'a> {
     DeleteConfirmation,
     Summarize {
         user_id: u64,
+    },
+    RetrySpeech {
+        message_id: i32,
+        user_id: u64,
+        action_type: &'a str, // "transcribe" or "summarize"
+        attempt: u32,
     },
     SpeechPage,
     BackToFull,
@@ -143,6 +150,21 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
     {
         return Some(CallbackAction::Summarize { user_id: author_id });
     }
+    if let Some(rest) = data.strip_prefix("retry_speech:") {
+        let parts: Vec<_> = rest.splitn(4, ':').collect();
+        if parts.len() == 4
+            && let Ok(message_id) = parts[0].parse()
+            && let Ok(user_id) = parts[1].parse()
+            && let Ok(attempt) = parts[3].parse()
+        {
+            return Some(CallbackAction::RetrySpeech {
+                message_id,
+                user_id,
+                action_type: parts[2], // ahh tupoy The trait bound `&str: FromStr` is not satisfied
+                attempt
+            });
+        }
+    }
     if data.starts_with("speech:page:") {
         return Some(CallbackAction::SpeechPage);
     }
@@ -165,7 +187,7 @@ fn parse_callback_data(data: &'_ str) -> Option<CallbackAction<'_>> {
 pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), MyError> {
     let config = Arc::new(Config::new().await);
 
-    let Some(data) = &q.data else {
+    let Some(data) = &q.data.clone() else {
         return Ok(());
     };
 
@@ -255,7 +277,7 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
                     } else {
                         "group"
                     })
-                    .to_string(),
+                        .to_string(),
                 };
                 module
                     .handle_callback(bot, &q, &owner, rest, commander_id)
@@ -281,6 +303,9 @@ pub async fn callback_query_handlers(bot: Bot, q: CallbackQuery) -> Result<(), M
             handle_delete_confirmation(bot, q, &config).await?
         }
         Some(CallbackAction::Summarize {user_id}) => summarization_handler(bot, q, &config, user_id).await?,
+        Some(CallbackAction::RetrySpeech { message_id, user_id, action_type, attempt }) => {
+            retry_speech_handler(bot, q.clone(), &config, message_id, user_id, action_type, attempt).await?
+        }
         Some(CallbackAction::SpeechPage) => pagination_handler(bot, q, &config).await?,
         Some(CallbackAction::BackToFull) => back_handler(bot, q, &config).await?,
         Some(CallbackAction::Whisper) => handle_whisper_callback(bot, q, &config).await?,
