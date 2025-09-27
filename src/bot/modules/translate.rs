@@ -32,7 +32,7 @@ impl Module for TranslateModule {
     }
 
     fn description(&self) -> &'static str {
-        "Протестировать можно через inlin'ы: \"@fulturatebot *слова для перевода*\"" // todo: finish this
+        "Модуль перевода, позволяющий быстро получить перевод введенного текста. Протестировать можно через inlin'ы: \"@fulturatebot *слова или фраза для перевода*\""
     }
 
     async fn get_settings_ui(
