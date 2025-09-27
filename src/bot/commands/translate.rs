@@ -123,7 +123,7 @@ pub async fn translate_handler(
                 .set(&format!("translate_job:{}", user.id), &job, 600)
                 .await?;
 
-            let keyboard = create_language_keyboard(0);
+            let keyboard = create_language_keyboard(0, user.id.0);
             bot.send_message(msg.chat.id, "Выберите язык для перевода:")
                 .reply_markup(keyboard)
                 .reply_parameters(ReplyParameters::new(replied_to_message.id))

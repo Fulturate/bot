@@ -1,6 +1,3 @@
-use crate::bot::modules::registry::MOD_MANAGER;
-use crate::bot::modules::Owner;
-use crate::core::db::schemas::settings::Settings;
 use crate::{
     bot::{
         callbacks::callback_query_handlers,
@@ -13,18 +10,22 @@ use crate::{
         keyboards::delete::delete_message_button,
         messager::{handle_currency, handle_speech},
         messages::chat::handle_bot_added,
+        modules::{Owner, registry::MOD_MANAGER},
     },
-    core::{config::Config,
-           db::schemas::user::User as DBUser},
+    core::{
+        config::Config,
+        db::schemas::{settings::Settings, user::User as DBUser},
+    },
     errors::MyError,
     util::enums::Command,
 };
 use log::{debug, error, info};
 use mongodb::bson::doc;
-use oximod::{set_global_client, Model};
+use oximod::{Model, set_global_client};
 use serde::Deserialize;
 use std::{convert::Infallible, fmt::Write, ops::ControlFlow, sync::Arc};
 use teloxide::{
+    Bot,
     dispatching::{
         Dispatcher, DpHandlerDescription, HandlerExt, MessageFilterExt, UpdateFilterExt,
     },
@@ -39,8 +40,8 @@ use teloxide::{
     },
     update_listeners::Polling,
     utils::{command::BotCommands, html},
-    Bot,
 };
+use crate::bot::inlines::translate::{handle_translate_inline, is_translate_query};
 
 async fn root_handler(
     update: Update,
@@ -87,8 +88,8 @@ async fn prompt_registration(bot: Bot, q: InlineQuery, me: Me) -> Result<(), MyE
             "Чтобы использовать бота, пожалуйста, сначала начните диалог с ним.",
         )),
     )
-        .description("Нажмите здесь, чтобы начать чат с ботом и разблокировать все функции.")
-        .reply_markup(keyboard);
+    .description("Нажмите здесь, чтобы начать чат с ботом и разблокировать все функции.")
+    .reply_markup(keyboard);
 
     if let Err(e) = bot
         .answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
@@ -116,10 +117,11 @@ async fn are_any_inline_modules_enabled(q: InlineQuery) -> bool {
         for module in MOD_MANAGER.get_all_modules() {
             if module.is_enabled(&owner).await
                 && let Some(settings_json) = settings.modules.get(module.key())
-                    && let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
-                        && check.enabled {
-                            return true;
-                        }
+                && let Ok(check) = serde_json::from_value::<EnabledCheck>(settings_json.clone())
+                && check.enabled
+            {
+                return true;
+            }
         }
     }
     false
@@ -133,7 +135,7 @@ async fn send_modules_disabled_message(bot: Bot, q: InlineQuery) -> Result<(), M
             "Все инлайн-модули выключены. Чтобы ими воспользоваться, активируйте их в настройках.",
         )),
     )
-        .description("Используйте /settings в чате с ботом, чтобы включить их.");
+    .description("Используйте /settings в чате с ботом, чтобы включить их.");
 
     bot.answer_inline_query(q.id, vec![InlineQueryResult::Article(article)])
         .cache_time(10)
@@ -149,7 +151,9 @@ pub fn inline_query_handler() -> Handler<'static, Result<(), MyError>, DpHandler
         )
         .branch(
             dptree::filter_async(is_user_registered)
-                .filter_async(|q: InlineQuery| async move { !are_any_inline_modules_enabled(q).await })
+                .filter_async(
+                    |q: InlineQuery| async move { !are_any_inline_modules_enabled(q).await },
+                )
                 .endpoint(send_modules_disabled_message),
         )
         .branch(
@@ -157,6 +161,7 @@ pub fn inline_query_handler() -> Handler<'static, Result<(), MyError>, DpHandler
                 .filter_async(are_any_inline_modules_enabled)
                 .branch(dptree::filter_async(is_currency_query).endpoint(handle_currency_inline))
                 .branch(dptree::filter_async(is_query_url).endpoint(handle_cobalt_inline))
+                .branch(dptree::filter_async(is_translate_query).endpoint(handle_translate_inline))
                 .branch(dptree::filter_async(is_whisper_query).endpoint(handle_whisper_inline)),
         )
 }
@@ -244,7 +249,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
             "<b>В чате:</b> <code>{}</code>{}",
             chat.id, title
         )
-            .unwrap();
+        .unwrap();
     } else {
         writeln!(&mut message_text, "<b>В чате:</b> <i>(???)</i>").unwrap();
     }
@@ -260,7 +265,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
             "<b>Вызвал:</b> {} (<code>{}</code>){}",
             full_name, user.id, username
         )
-            .unwrap();
+        .unwrap();
     } else {
         writeln!(&mut message_text, "<b>Вызвал:</b> <i>(???)</i>").unwrap();
     }
@@ -271,7 +276,7 @@ pub async fn handle_error(err: Arc<MyError>, update: Update, config: Arc<Config>
         "\n<b>Ошибка:</b>\n<blockquote expandable>{}</blockquote>",
         html::escape(&error_name)
     )
-        .unwrap();
+    .unwrap();
 
     let hashtag = "#error";
     writeln!(&mut message_text, "\n{}", hashtag).unwrap();
